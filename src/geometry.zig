@@ -46,13 +46,25 @@ pub const Arc = struct {
         }
         return .{ min_pos, max_pos };
     }
+
+    pub fn dirA(arc: Arc) [2]f32 {
+        const line_dir = vec2.normalize(vec2.subtract(arc.pos_b, arc.pos_a));
+        return mat2.multiplyV(mat2.rotate(0, 1, -arc.angle), line_dir);
+    }
+
+    pub fn dirB(arc: Arc) [2]f32 {
+        const line_dir = vec2.normalize(vec2.subtract(arc.pos_a, arc.pos_b));
+        return mat2.multiplyV(mat2.rotate(0, 1, arc.angle), line_dir);
+    }
 };
+
+pub fn angleBetween(dir_a: [2]f32, dir_b: [2]f32) f32 {
+    return std.math.atan2(f32, dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0], dir_a[0] * dir_b[0] + dir_a[1] * dir_b[1]);
+}
 
 /// Get angle of an arc that contains given point.
 pub fn arcAngleFromPoint(pos_a: [2]f32, pos_b: [2]f32, point_pos: [2]f32) f32 {
-    const vec_a = vec2.subtract(pos_a, point_pos);
-    const vec_b = vec2.subtract(point_pos, pos_b);
-    return std.math.atan2(f32, vec_a[0] * vec_b[1] - vec_a[1] * vec_b[0], vec_a[0] * vec_b[0] + vec_a[1] * vec_b[1]);
+    return angleBetween(vec2.subtract(pos_a, point_pos), vec2.subtract(point_pos, pos_b));
 }
 
 pub const Path = struct {
@@ -156,42 +168,85 @@ pub const Stroke = struct {
 
     pub const CapStyle = enum {
         none,
-        rounded,
-        sharp,
+        round,
+        bevel,
+        miter,
     };
 
-    pub fn genCap(stroke: Stroke, pos: [2]f32, pos_before: ?[2]f32, pos_after: ?[2]f32, color: [4]u8, buffer: *render.Buffer) !void {
+    // Generate cap from two directions (normalized, facing out from the cap)
+    pub fn genCap(stroke: Stroke, pos: [2]f32, dir_a: [2]f32, dir_b: [2]f32, color: [4]u8, buffer: *render.Buffer) !void {
+        if (vec2.dot(dir_a, dir_b) == 0) return; // directions are opposite, no cap is needed
+
+        const dir = vec2.multiplyS(vec2.normalize(vec2.add(dir_a, dir_b)), -stroke.width);
+        const sign: f32 = if (vec2.dot(normal(dir_a), dir_b) >= 0) 1 else -1;
+        const normal_a = vec2.multiplyS(normal(dir_a), -sign * stroke.width);
+        const normal_b = vec2.multiplyS(normal(dir_b), sign * stroke.width);
+
         switch (stroke.cap) {
             .none => {},
-            .rounded => {
-                try Circle.gen(.{ .pos = pos, .radius = stroke.width / 2 }, color, buffer); // TODO: could be optimized
+            .round => {
+                try buffer.append(.{ .positions = &.{
+                    pos,
+                    vec2.add(pos, normal_a),
+                    vec2.add(pos, normal_b),
+                }, .angles = &.{ 0, arcAngleFromPoint(normal_a, normal_b, dir), 0 } }, color);
             },
-            .sharp => { // TODO
-                _ = pos_before;
-                _ = pos_after;
+            .bevel => {
+                try buffer.append(.{ .positions = &.{
+                    pos,
+                    vec2.add(pos, normal_a),
+                    vec2.add(pos, normal_b),
+                }, .angles = &.{ 0, 0, 0 } }, color);
+            },
+            .miter => {
+                const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (dir[0] * dir_a[1] - dir[1] * dir_a[0]);
+                if (tip_dist > 0 and tip_dist < 8) {
+                    try buffer.append(.{ .positions = &.{
+                        pos,
+                        vec2.add(pos, normal_a),
+                        vec2.add(pos, vec2.multiplyS(dir, tip_dist)),
+                        vec2.add(pos, normal_b),
+                    }, .angles = &.{ 0, 0, 0, 0 } }, color);
+                } else {
+                    try buffer.append(.{ .positions = &.{
+                        pos,
+                        vec2.add(pos, normal_a),
+                        vec2.add(vec2.add(pos, normal_a), vec2.multiplyS(dir_a, -stroke.width)),
+                        vec2.add(vec2.add(pos, normal_b), vec2.multiplyS(dir_b, -stroke.width)),
+                        vec2.add(pos, normal_b),
+                    }, .angles = &.{ 0, 0, 0, 0, 0 } }, color);
+                }
             },
         }
     }
 
     pub fn genArc(stroke: Stroke, arc: Arc, color: [4]u8, buffer: *render.Buffer) !void {
-        const direction = vec2.multiplyS(vec2.normalize(vec2.subtract(arc.pos_b, arc.pos_a)), stroke.width / 2);
-        const direction_a = normal(mat2.multiplyV(mat2.rotate(0, 1, -arc.angle), direction));
-        const direction_b = normal(mat2.multiplyV(mat2.rotate(0, 1, arc.angle), vec2.negate(direction)));
+        const normal_a = vec2.multiplyS(normal(arc.dirA()), stroke.width);
+        const normal_b = vec2.multiplyS(normal(arc.dirB()), stroke.width);
         try buffer.append(.{ .positions = &.{
-            vec2.add(arc.pos_a, direction_a),
-            vec2.subtract(arc.pos_b, direction_b),
-            vec2.add(arc.pos_b, direction_b),
-            vec2.subtract(arc.pos_a, direction_a),
+            vec2.add(arc.pos_a, normal_a),
+            vec2.subtract(arc.pos_b, normal_b),
+            vec2.add(arc.pos_b, normal_b),
+            vec2.subtract(arc.pos_a, normal_a),
         }, .angles = &.{ arc.angle, 0, -arc.angle, 0 } }, color);
     }
 
     pub fn genPath(stroke: Stroke, path: Path, color: [4]u8, buffer: *render.Buffer) !void {
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
-            const prev_pos = if (path.prevIndex(index)) |prev_index| path.getPos(prev_index) else null;
-            const next_pos = if (path.nextIndex(index)) |next_index| path.getPos(next_index) else null;
-            try stroke.genCap(path.getPos(index), prev_pos, next_pos, color, buffer);
-            if (path.getArcFrom(index)) |arc| try stroke.genArc(arc, color, buffer);
+            if (path.getArcFrom(index)) |arc_from| {
+                try stroke.genArc(arc_from, color, buffer);
+                if (path.getArcTo(index)) |arc_to| {
+                    try stroke.genCap(path.getPos(index), arc_from.dirA(), arc_to.dirB(), color, buffer);
+                } else {
+                    try stroke.genCap(path.getPos(index), arc_from.dirA(), arc_from.dirA(), color, buffer);
+                }
+            } else if (path.getArcTo(index)) |arc_to| {
+                try stroke.genCap(path.getPos(index), arc_to.dirB(), arc_to.dirB(), color, buffer);
+            } else {
+                try stroke.genCap(path.getPos(index), .{ 1, 0 }, .{ 1, 0 }, color, buffer);
+                try stroke.genCap(path.getPos(index), .{ -1, 0 }, .{ -1, 0 }, color, buffer);
+            }
         }
     }
 };

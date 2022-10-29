@@ -11,7 +11,7 @@ pub const Object = struct {
     positions: std.ArrayListUnmanaged([2]f32) = .{},
     angles: std.ArrayListUnmanaged(f32) = .{},
     color: [4]u8 = .{ 32, 32, 32, 255 },
-    stroke: geometry.Stroke = .{ .width = 0.01, .cap = .rounded },
+    stroke: geometry.Stroke = .{ .width = 0.005, .cap = .round },
     stroke_color: [4]u8 = .{ 255, 255, 255, 255 },
 
     pub inline fn toPath(object: Object) geometry.Path {

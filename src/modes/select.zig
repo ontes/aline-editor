@@ -7,7 +7,7 @@ const geometry = @import("../geometry.zig");
 const platform = @import("../platform.zig");
 
 const color = [4]u8{ 255, 255, 0, 255 };
-const stroke = geometry.Stroke{ .width = 0.01, .cap = .none };
+const stroke = geometry.Stroke{ .width = 0.005, .cap = .none };
 
 pub inline fn canInit() bool {
     return true;

@@ -7,7 +7,7 @@ const platform = @import("../platform.zig");
 const render = @import("../render.zig");
 
 const color = [4]u8{ 255, 32, 32, 255 };
-const stroke = geometry.Stroke{ .width = 0.01, .cap = .rounded };
+const stroke = geometry.Stroke{ .width = 0.005, .cap = .none };
 
 pub fn canInit() bool {
     return editor.selected_nodes.items.len == 2 and getNode(0).object_index == getNode(1).object_index and

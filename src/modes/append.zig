@@ -7,7 +7,7 @@ const platform = @import("../platform.zig");
 const render = @import("../render.zig");
 
 const color = [4]u8{ 255, 32, 32, 255 };
-const preview_stroke = geometry.Stroke{ .width = 0.01, .cap = .rounded };
+const preview_stroke = geometry.Stroke{ .width = 0.005, .cap = .none };
 
 inline fn getNode() *editor.Node {
     return &editor.selected_nodes.items[0];

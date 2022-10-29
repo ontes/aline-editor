@@ -7,7 +7,7 @@ const platform = @import("../platform.zig");
 const render = @import("../render.zig");
 
 const color = [4]u8{ 255, 32, 32, 255 };
-const stroke = geometry.Stroke{ .width = 0.01, .cap = .rounded };
+const stroke = geometry.Stroke{ .width = 0.005, .cap = .none };
 
 var start_pos: [2]f32 = undefined;
 
@@ -36,7 +36,7 @@ pub fn gen(buffer: *render.Buffer) !void {
                 try stroke.genArc(arc, color, buffer);
             }
         }
-        try stroke.genCap(vec2.add(node.getPos(), getOffset()), null, null, color, buffer);
+        // try stroke.genCap(vec2.add(node.getPos(), getOffset()), null, null, color, buffer);
         if (node.next()) |next_node| {
             var arc = node.getArcFrom().?;
             arc.pos_a = vec2.add(arc.pos_a, getOffset());
