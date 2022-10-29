@@ -121,7 +121,7 @@ pub const Window = struct {
     // }
 };
 
-pub fn pollEvents(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
+pub fn update(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
     while (x11.pending(display) > 0) {
         var event: x11.Event = undefined;
         x11.nextEvent(display, &event);

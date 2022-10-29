@@ -35,27 +35,26 @@ pub fn deinit() void {
     message_queue.deinit();
 }
 
-pub fn createWindow(position: [2]i32, size: [2]u32, name: [*:0]const u8) !Window {
-    const win32_window = win32.createWindowEx(
-        win32.WindowStyleEx.overlapped_window, // .{ .app_window = true }, // or overlapped_winow
-        window_class.class_name,
-        name,
-        win32.WindowStyle.overlapped_window,
-        position[0],
-        position[1],
-        @intCast(c_int, size[0]),
-        @intCast(c_int, size[1]),
-        null,
-        0,
-        window_class.instance,
-        null,
-    ) orelse return err;
-
-    return .{ .win32 = win32_window };
-}
-
 pub const Window = struct {
     win32: win32.Window,
+
+    pub fn create(position: [2]i32, size: [2]u32, name: [*:0]const u8) !Window {
+        const win32_window = win32.createWindowEx(
+            win32.WindowStyleEx.overlapped_window, // .{ .app_window = true }, // or overlapped_winow
+            window_class.class_name,
+            name,
+            win32.WindowStyle.overlapped_window,
+            position[0],
+            position[1],
+            @intCast(c_int, size[0]),
+            @intCast(c_int, size[1]),
+            null,
+            0,
+            window_class.instance,
+            null,
+        ) orelse return err;
+        return .{ .win32 = win32_window };
+    }
 
     pub fn destroy(window: Window) void {
         _ = win32.destroyWindow(window.win32);
@@ -83,7 +82,7 @@ pub const Window = struct {
     }
 };
 
-pub fn pollEvents(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
+pub fn update(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
     var message: win32.Message = undefined;
     while (win32.peekMessage(&message, null, 0, 0, .remove) == .true) {
         _ = win32.translateMessage(&message);

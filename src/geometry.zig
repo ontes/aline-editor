@@ -3,143 +3,65 @@ const render = @import("render.zig");
 const vec2 = @import("linalg.zig").vec(f32, 2);
 const mat2 = @import("linalg.zig").mat(f32, 2);
 
-pub const Vertices = std.ArrayList(render.Vertex);
-pub const Indices = std.ArrayList(u32);
-
-pub fn genFanIndices(out_indices: *Indices, index: u32, len: u32) !void {
-    var i: u32 = 0;
-    while (i < len - 2) : (i += 1) {
-        try out_indices.appendSlice(&.{ index, index + i + 1, index + i + 2 });
-    }
-}
-
-pub fn genStripeIndices(out_indices: *Indices, index: u32, len: u32) !void {
-    var i: u32 = 0;
-    while (i < len - 2) : (i += 1) {
-        try out_indices.appendSlice(&.{ index + i, index + i + 1, index + i + 2 });
-    }
-}
-
-pub fn arcSeg(pos_a: [2]f32, pos_b: [2]f32, angle: f32, seg_angle: f32) [2]f32 {
-    std.debug.assert(angle != 0);
-    const scale = @sin(seg_angle) / @sin(angle);
-    const rotation = mat2.rotate(0, 1, seg_angle - angle);
-    return vec2.add(pos_a, mat2.multiplyV(rotation, vec2.multiplyS(vec2.subtract(pos_b, pos_a), scale)));
-}
-
-pub fn genArcVertices(
-    out_vertices: *Vertices,
-    pos_a: [2]f32,
-    pos_b: [2]f32,
-    angle: f32,
-    step_angle: f32,
-    color: [4]u8,
-) !void {
-    std.debug.assert(step_angle > 0);
-    try out_vertices.append(.{ .pos = pos_a, .color = color }); // first seg is outside of the loop because angle can be 0
-    var seg_angle = step_angle;
-    while (seg_angle < @fabs(angle)) : (seg_angle += step_angle) {
-        try out_vertices.append(.{ .pos = arcSeg(pos_a, pos_b, angle, seg_angle * std.math.sign(angle)), .color = color });
-    }
-}
-
 pub inline fn normal(vec: [2]f32) [2]f32 {
     return .{ -vec[1], vec[0] };
 }
 
-pub fn genCircle(
-    out_vertices: *Vertices,
-    out_indices: *Indices,
-    center: [2]f32,
-    radius: f32,
-    step_angle: f32,
-    color: [4]u8,
-) !void {
-    const index = @intCast(u32, out_vertices.items.len);
-    const pos_a = vec2.add(center, .{ -radius, 0 });
-    const pos_b = vec2.add(center, .{ radius, 0 });
-    try genArcVertices(out_vertices, pos_a, pos_b, std.math.pi / 2.0, step_angle, color);
-    try genArcVertices(out_vertices, pos_b, pos_a, std.math.pi / 2.0, step_angle, color);
-    try genFanIndices(out_indices, index, @intCast(u32, out_vertices.items.len) - index);
-}
+pub const Arc = struct {
+    pos_a: [2]f32,
+    pos_b: [2]f32,
+    angle: f32,
 
-pub const Stroke = struct {
-    width: f32 = 0,
-    color: [4]u8 = .{ 0, 0, 0, 1 },
-    cap: CapStyle = .none,
-    seg_angle: f32 = std.math.pi / 16.0,
-    cap_seg_angle: f32 = std.math.pi / 8.0,
-
-    pub const CapStyle = enum {
-        none,
-        rounded,
-        sharp,
-    };
-
-    pub fn genCap(stroke: Stroke, out_vertices: *Vertices, out_indices: *Indices, pos: [2]f32, pos_before: ?[2]f32, pos_after: ?[2]f32) !void {
-        switch (stroke.cap) {
-            .none => {},
-            .rounded => {
-                try genCircle(out_vertices, out_indices, pos, stroke.width / 2, stroke.cap_seg_angle, stroke.color); // TODO: could be optimized
-            },
-            .sharp => { // TODO
-                _ = pos_before;
-                _ = pos_after;
-            },
-        }
+    /// Get point on arc by a given angle (undefined for straight lines)
+    pub fn point(arc: Arc, point_angle: f32) [2]f32 {
+        std.debug.assert(arc.angle != 0);
+        const scale = @sin(point_angle) / @sin(arc.angle);
+        const rotation = mat2.rotate(0, 1, point_angle - arc.angle);
+        return vec2.add(arc.pos_a, mat2.multiplyV(rotation, vec2.multiplyS(vec2.subtract(arc.pos_b, arc.pos_a), scale)));
     }
 
-    pub fn genArc(stroke: Stroke, out_vertices: *Vertices, out_indices: *Indices, pos_a: [2]f32, pos_b: [2]f32, angle: f32) !void {
-        const direction = vec2.multiplyS(vec2.normalize(vec2.subtract(pos_b, pos_a)), stroke.width / 2);
-        const direction_a = mat2.multiplyV(mat2.rotate(0, 1, -angle), direction);
-        const direction_b = mat2.multiplyV(mat2.rotate(0, 1, angle), vec2.negate(direction));
+    /// Get underlying circle (undefined for straight lines)
+    pub fn toCircle(arc: Arc) Circle {
+        std.debug.assert(arc.angle != 0);
+        const line_center = vec2.divideS(vec2.add(arc.pos_a, arc.pos_b), 2);
+        const line_normal = normal(vec2.subtract(line_center, arc.pos_a));
+        return .{
+            .pos = vec2.add(line_center, vec2.divideS(line_normal, @tan(arc.angle))),
+            .radius = @fabs(vec2.abs(line_normal) / @sin(arc.angle)),
+        };
+    }
 
-        const top_index = @intCast(u32, out_vertices.items.len);
-        try genArcVertices(out_vertices, vec2.add(pos_a, normal(direction_a)), vec2.subtract(pos_b, normal(direction_b)), angle, stroke.seg_angle, stroke.color);
-        try out_vertices.append(.{ .pos = vec2.subtract(pos_b, normal(direction_b)), .color = stroke.color });
-
-        const bot_index = @intCast(u32, out_vertices.items.len);
-        try genArcVertices(out_vertices, vec2.subtract(pos_a, normal(direction_a)), vec2.add(pos_b, normal(direction_b)), angle, stroke.seg_angle, stroke.color);
-        try out_vertices.append(.{ .pos = vec2.add(pos_b, normal(direction_b)), .color = stroke.color });
-
-        const len = @floatToInt(u32, @fabs(angle / stroke.seg_angle)) + 1;
-        var i: u32 = 0;
-        while (i < len) : (i += 1) {
-            try out_indices.appendSlice(&.{
-                top_index + i,
-                bot_index + i,
-                top_index + 1 + i,
-                bot_index + i,
-                top_index + 1 + i,
-                bot_index + 1 + i,
-            });
+    pub fn boundingBox(arc: Arc) [2][2]f32 {
+        var min_pos = vec2.min(arc.pos_a, arc.pos_b);
+        var max_pos = vec2.max(arc.pos_a, arc.pos_b);
+        if (arc.angle != 0) {
+            const circle = arc.toCircle();
+            for ([4][2]f32{ .{ 0, 1 }, .{ 0, -1 }, .{ 1, 0 }, .{ -1, 0 } }) |direction| {
+                const pos = vec2.add(circle.pos, vec2.multiplyS(direction, circle.radius));
+                if (std.math.sign(arcAngleFromPoint(arc.pos_a, arc.pos_b, pos)) == std.math.sign(arc.angle)) {
+                    min_pos = vec2.min(min_pos, pos);
+                    max_pos = vec2.max(max_pos, pos);
+                }
+            }
         }
+        return .{ min_pos, max_pos };
     }
 };
+
+/// Get angle of an arc that contains given point.
+pub fn arcAngleFromPoint(pos_a: [2]f32, pos_b: [2]f32, point_pos: [2]f32) f32 {
+    const vec_a = vec2.subtract(pos_a, point_pos);
+    const vec_b = vec2.subtract(point_pos, pos_b);
+    return std.math.atan2(f32, vec_a[0] * vec_b[1] - vec_a[1] * vec_b[0], vec_a[0] * vec_b[0] + vec_a[1] * vec_b[1]);
+}
 
 pub const Path = struct {
     positions: []const [2]f32,
     angles: []const f32,
-    stroke: Stroke,
 
-    pub fn gen(path: Path, out_vertices: *Vertices, out_indices: *Indices) !void {
-        var i: u32 = 0;
-        while (i < path.len()) : (i += 1) {
-            try path.stroke.genCap(
-                out_vertices,
-                out_indices,
-                path.getPos(i),
-                if (path.prevIndex(i)) |j| path.getPos(j) else null,
-                if (path.nextIndex(i)) |j| path.getPos(j) else null,
-            );
-            if (path.nextIndex(i)) |j| try path.stroke.genArc(
-                out_vertices,
-                out_indices,
-                path.getPos(i),
-                path.getPos(j),
-                path.getAngleFrom(i),
-            );
-        }
+    pub fn gen(path: Path, color: [4]u8, buffer: *render.Buffer) !void {
+        std.debug.assert(path.isLooped());
+        try buffer.append(path, color);
     }
 
     pub inline fn isLooped(path: Path) bool {
@@ -149,18 +71,6 @@ pub const Path = struct {
     // Returns number of vertices
     pub inline fn len(path: Path) u32 {
         return @intCast(u32, path.positions.len);
-    }
-
-    pub inline fn getPos(path: Path, index: u32) [2]f32 {
-        return path.positions[index];
-    }
-
-    pub inline fn getAngleTo(path: Path, index: u32) f32 {
-        return path.angles[path.prevIndex(index) orelse unreachable];
-    }
-
-    pub inline fn getAngleFrom(path: Path, index: u32) f32 {
-        return path.angles[index];
     }
 
     pub inline fn nextIndex(path: Path, index: u32) ?u32 {
@@ -174,6 +84,114 @@ pub const Path = struct {
         if (path.isLooped()) return path.len() - 1;
         return null;
     }
+
+    pub inline fn getPos(path: Path, index: u32) [2]f32 {
+        return path.positions[index];
+    }
+
+    pub inline fn getAngleFrom(path: Path, index: u32) ?f32 {
+        return if (index < path.angles.len) path.angles[index] else null;
+    }
+
+    pub inline fn getAngleTo(path: Path, index: u32) ?f32 {
+        return if (path.prevIndex(index)) |prev_index| path.angles[prev_index] else null;
+    }
+
+    pub inline fn getArcFrom(path: Path, index: u32) ?Arc {
+        return if (path.nextIndex(index)) |next_index| .{
+            .pos_a = path.getPos(index),
+            .pos_b = path.getPos(next_index),
+            .angle = path.getAngleFrom(index).?,
+        } else null;
+    }
+
+    pub inline fn getArcTo(path: Path, index: u32) ?Arc {
+        return if (path.prevIndex(index)) |prev_index| .{
+            .pos_a = path.getPos(prev_index),
+            .pos_b = path.getPos(index),
+            .angle = path.getAngleTo(index).?,
+        } else null;
+    }
+
+    pub fn isInside(path: Path, pos: [2]f32) bool {
+        std.debug.assert(path.isLooped());
+        var inside = false;
+        var index: u32 = 0;
+        while (index < path.len()) : (index += 1) {
+            inside = inside != isCrossingLine(pos, path.getPos(index), path.getPos(path.nextIndex(index).?));
+            inside = inside != isInArc(pos, path.getArcFrom(index).?);
+        }
+        return inside;
+    }
+
+    fn isCrossingLine(pos: [2]f32, pos_a: [2]f32, pos_b: [2]f32) bool {
+        return ((pos[1] < pos_a[1]) != (pos[1] < pos_b[1])) and
+            (pos[0] < (pos_b[0] - pos_a[0]) / (pos_b[1] - pos_a[1]) * (pos[1] - pos_a[1]) + pos_a[0]);
+    }
+
+    fn isInArc(pos: [2]f32, arc: Arc) bool {
+        const pos_angle = arcAngleFromPoint(arc.pos_a, arc.pos_b, pos);
+        return std.math.sign(pos_angle) == std.math.sign(arc.angle) and @fabs(pos_angle) < @fabs(arc.angle);
+    }
 };
 
-// pub fn genStrokePath(out_vertices: *Vertices, out_indices: *Indices, positions: []const [2]f32, )
+pub const Circle = struct {
+    pos: [2]f32,
+    radius: f32,
+
+    pub fn gen(circle: Circle, color: [4]u8, buffer: *render.Buffer) !void {
+        try buffer.append(.{ .positions = &.{
+            vec2.add(circle.pos, .{ -circle.radius, 0 }),
+            vec2.add(circle.pos, .{ circle.radius, 0 }),
+        }, .angles = &.{
+            std.math.pi / 2.0,
+            std.math.pi / 2.0,
+        } }, color);
+    }
+};
+
+pub const Stroke = struct {
+    width: f32,
+    cap: CapStyle,
+
+    pub const CapStyle = enum {
+        none,
+        rounded,
+        sharp,
+    };
+
+    pub fn genCap(stroke: Stroke, pos: [2]f32, pos_before: ?[2]f32, pos_after: ?[2]f32, color: [4]u8, buffer: *render.Buffer) !void {
+        switch (stroke.cap) {
+            .none => {},
+            .rounded => {
+                try Circle.gen(.{ .pos = pos, .radius = stroke.width / 2 }, color, buffer); // TODO: could be optimized
+            },
+            .sharp => { // TODO
+                _ = pos_before;
+                _ = pos_after;
+            },
+        }
+    }
+
+    pub fn genArc(stroke: Stroke, arc: Arc, color: [4]u8, buffer: *render.Buffer) !void {
+        const direction = vec2.multiplyS(vec2.normalize(vec2.subtract(arc.pos_b, arc.pos_a)), stroke.width / 2);
+        const direction_a = normal(mat2.multiplyV(mat2.rotate(0, 1, -arc.angle), direction));
+        const direction_b = normal(mat2.multiplyV(mat2.rotate(0, 1, arc.angle), vec2.negate(direction)));
+        try buffer.append(.{ .positions = &.{
+            vec2.add(arc.pos_a, direction_a),
+            vec2.subtract(arc.pos_b, direction_b),
+            vec2.add(arc.pos_b, direction_b),
+            vec2.subtract(arc.pos_a, direction_a),
+        }, .angles = &.{ arc.angle, 0, -arc.angle, 0 } }, color);
+    }
+
+    pub fn genPath(stroke: Stroke, path: Path, color: [4]u8, buffer: *render.Buffer) !void {
+        var index: u32 = 0;
+        while (index < path.len()) : (index += 1) {
+            const prev_pos = if (path.prevIndex(index)) |prev_index| path.getPos(prev_index) else null;
+            const next_pos = if (path.nextIndex(index)) |next_index| path.getPos(next_index) else null;
+            try stroke.genCap(path.getPos(index), prev_pos, next_pos, color, buffer);
+            if (path.getArcFrom(index)) |arc| try stroke.genArc(arc, color, buffer);
+        }
+    }
+};

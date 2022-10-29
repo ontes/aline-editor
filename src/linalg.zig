@@ -96,6 +96,22 @@ pub fn vec(comptime Scalar: type, comptime n: comptime_int) type {
             return res;
         }
 
+        pub fn min(v1: Vec, v2: Vec) Vec {
+            var res: Vec = undefined;
+            comptime var i = 0;
+            inline while (i < n) : (i += 1)
+                res[i] = std.math.min(v1[i], v2[i]);
+            return res;
+        }
+
+        pub fn max(v1: Vec, v2: Vec) Vec {
+            var res: Vec = undefined;
+            comptime var i = 0;
+            inline while (i < n) : (i += 1)
+                res[i] = std.math.max(v1[i], v2[i]);
+            return res;
+        }
+
         pub fn sum(v: Vec) Scalar {
             var res: Scalar = 0;
             comptime var i = 0;

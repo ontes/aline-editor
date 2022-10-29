@@ -4,12 +4,10 @@ const editor = @import("../editor.zig");
 const input = @import("../input.zig");
 const geometry = @import("../geometry.zig");
 const platform = @import("../platform.zig");
+const render = @import("../render.zig");
 
-const preview_stroke = geometry.Stroke{
-    .width = 0.01,
-    .color = .{ 255, 32, 32, 255 },
-    .cap = .rounded,
-};
+const color = [4]u8{ 255, 32, 32, 255 };
+const stroke = geometry.Stroke{ .width = 0.01, .cap = .rounded };
 
 var start_pos: [2]f32 = undefined;
 
@@ -29,44 +27,22 @@ pub fn deinit() void {
     start_pos = undefined;
 }
 
-pub fn gen(out_vertices: *geometry.Vertices, out_indices: *geometry.Indices) !void {
+pub fn gen(buffer: *render.Buffer) !void {
     for (editor.selected_nodes.items) |node| {
-        if (node.getPath().prevIndex(node.index)) |prev_index| {
-            if (!editor.isSelected(.{ .path_index = node.path_index, .index = prev_index })) {
-                try preview_stroke.genArc(
-                    out_vertices,
-                    out_indices,
-                    node.getPath().getPos(prev_index),
-                    vec2.add(node.getPos(), getOffset()),
-                    node.getPath().getAngleTo(node.index),
-                );
+        if (node.prev()) |prev_node| {
+            if (!editor.isSelected(prev_node)) {
+                var arc = node.getArcTo().?;
+                arc.pos_b = vec2.add(arc.pos_b, getOffset());
+                try stroke.genArc(arc, color, buffer);
             }
         }
-        try preview_stroke.genCap(
-            out_vertices,
-            out_indices,
-            vec2.add(node.getPos(), getOffset()),
-            null,
-            null,
-        );
-        if (node.getPath().nextIndex(node.index)) |next_index| {
-            if (!editor.isSelected(.{ .path_index = node.path_index, .index = next_index })) {
-                try preview_stroke.genArc(
-                    out_vertices,
-                    out_indices,
-                    vec2.add(node.getPos(), getOffset()),
-                    node.getPath().getPos(next_index),
-                    node.getPath().getAngleFrom(node.index),
-                );
-            } else {
-                try preview_stroke.genArc(
-                    out_vertices,
-                    out_indices,
-                    vec2.add(node.getPos(), getOffset()),
-                    vec2.add(node.getPath().getPos(next_index), getOffset()),
-                    node.getPath().getAngleFrom(node.index),
-                );
-            }
+        try stroke.genCap(vec2.add(node.getPos(), getOffset()), null, null, color, buffer);
+        if (node.next()) |next_node| {
+            var arc = node.getArcFrom().?;
+            arc.pos_a = vec2.add(arc.pos_a, getOffset());
+            if (editor.isSelected(next_node))
+                arc.pos_b = vec2.add(arc.pos_b, getOffset());
+            try stroke.genArc(arc, color, buffer);
         }
     }
 }
@@ -76,7 +52,7 @@ pub fn onEvent(event: platform.Event) !void {
         .key_press => |key| switch (key) {
             .mouse_left => {
                 for (editor.selected_nodes.items) |node|
-                    node.getDynamicPath().positions.items[node.index] = vec2.add(node.getPos(), getOffset());
+                    node.getObject().positions.items[node.index] = vec2.add(node.getPos(), getOffset());
                 try editor.step();
                 _ = try editor.setMode(.select);
             },

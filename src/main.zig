@@ -4,6 +4,7 @@ const render = @import("render.zig");
 const geometry = @import("geometry.zig");
 const input = @import("input.zig");
 const editor = @import("editor.zig");
+const timer = @import("timer.zig");
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
@@ -12,10 +13,6 @@ var context: render.Context = undefined;
 
 pub var main_buffer: render.Buffer = undefined;
 pub var tool_buffer: render.Buffer = undefined;
-pub var snap_grid_buffer: render.Buffer = undefined;
-
-pub var vertices: geometry.Vertices = undefined;
-pub var indices: geometry.Indices = undefined;
 
 var should_run = true;
 
@@ -25,25 +22,18 @@ fn init() !void {
     window.show();
 
     context = try render.Context.init(window);
-    main_buffer = render.Buffer.init(context);
-    tool_buffer = render.Buffer.init(context);
-    snap_grid_buffer = render.Buffer.init(context);
-
-    vertices = geometry.Vertices.init(gpa.allocator());
-    indices = geometry.Indices.init(gpa.allocator());
+    main_buffer = render.Buffer.init(context, gpa.allocator());
+    tool_buffer = render.Buffer.init(context, gpa.allocator());
 
     editor.init(gpa.allocator());
+    timer.update();
 }
 
 fn deinit() void {
     editor.deinit();
 
-    vertices.deinit();
-    indices.deinit();
-
     main_buffer.deinit();
     tool_buffer.deinit();
-    snap_grid_buffer.deinit();
     context.deinit();
 
     window.destroy();
@@ -53,10 +43,12 @@ fn deinit() void {
 }
 
 fn update() !void {
-    try platform.pollEvents(onEvent);
+    timer.update();
+    if (timer.oncePerMs(1000))
+        std.debug.print("FPS: {}\n", .{timer.fps()});
+    try platform.update(onEvent);
     try editor.update();
-    context.update(&.{ snap_grid_buffer, main_buffer, tool_buffer });
-    std.time.sleep(16 * std.time.ns_per_ms);
+    context.update(&.{ main_buffer, tool_buffer });
 }
 
 fn onEvent(event: platform.Event, _: platform.Window) !void {
