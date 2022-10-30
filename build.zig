@@ -10,8 +10,12 @@ pub fn build(b: *std.build.Builder) !void {
 
     exe.linkLibC();
     exe.addLibraryPath(".");
-    exe.linkSystemLibrary("webgpu");
-    exe.linkSystemLibrary("X11");
+    exe.linkSystemLibrary("webgpu_dawn");
+    switch (target.os_tag orelse @import("builtin").target.os.tag) {
+        .linux => exe.linkSystemLibrary("X11"),
+        .windows => exe.linkSystemLibrary("user32"),
+        else => return error.UnsupportedTarget,
+    }
 
     exe.install();
 
