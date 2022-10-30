@@ -32,14 +32,14 @@ pub fn init() !void {
 pub fn deinit() void {}
 
 pub fn gen(buffer: *render.Buffer) !void {
-    try preview_stroke.genArc(.{ .pos_a = getNode().getPos(), .pos_b = input.mouse_pos, .angle = 0 }, color, buffer);
+    try preview_stroke.genArc(.{ .pos_a = getNode().pos(), .pos_b = input.mouse_pos, .angle = 0 }, color, buffer);
 }
 
 pub fn onEvent(event: platform.Event) !void {
     switch (event) {
         .key_release => |key| switch (key) {
             .mouse_left => {
-                if (vec2.norm(vec2.subtract(input.mouse_pos, getNode().getPath().getPos(0))) < 0.05 * 0.05) { // ending by creating a loop
+                if (vec2.norm(vec2.subtract(input.mouse_pos, getNode().getPath().pos(0))) < 0.05 * 0.05) { // ending by creating a loop
                     try getNode().getObject().loop(0);
                     getNode().index = 0;
                     _ = try editor.setMode(.select);

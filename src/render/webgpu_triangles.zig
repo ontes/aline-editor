@@ -169,11 +169,10 @@ pub const Buffer = struct {
 
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
-            // first vertex is outside of the loop because angle can be 0
-            try buffer.vertices.append(buffer.allocator, .{ .pos = path.getPos(index), .color = color });
-            var angle: f32 = step_angle;
-            while (angle < @fabs(path.getAngleFrom(index).?)) : (angle += step_angle) {
-                const pos = path.getArcFrom(index).?.point(angle * std.math.sign(path.getAngleFrom(index).?));
+            const step_count = @floatToInt(u32, @fabs(path.angleFrom(index).?) / step_angle) + 1;
+            var step: u32 = 0;
+            while (step < step_count) : (step += 1) {
+                const pos = path.arcFrom(index).?.point(@intToFloat(f32, step) / @intToFloat(f32, step_count));
                 try buffer.vertices.append(buffer.allocator, .{ .pos = pos, .color = color });
             }
         }

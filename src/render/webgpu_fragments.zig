@@ -69,7 +69,7 @@ const fs_source =
     \\  fn arcAngle(pos: vec2<f32>, pos_a: vec2<f32>, pos_b: vec2<f32>) -> f32 {
     \\      let vec_a = pos_a - pos;
     \\      let vec_b = pos - pos_b;
-    \\      return atan2(vec_a.x * vec_b.y - vec_a.y * vec_b.x, vec_a.x * vec_b.x + vec_a.y * vec_b.y);
+    \\      return -atan2(vec_a.x * vec_b.y - vec_a.y * vec_b.x, vec_a.x * vec_b.x + vec_a.y * vec_b.y);
     \\  }
     \\  fn isInArc(pos: vec2<f32>, pos_a: vec2<f32>, pos_b: vec2<f32>, angle: f32) -> bool {
     \\      let pos_angle = arcAngle(pos, pos_a, pos_b);
@@ -229,7 +229,7 @@ pub const Buffer = struct {
         var max_pos = path.positions[0];
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
-            const bounding_box = path.getArcFrom(index).?.boundingBox();
+            const bounding_box = path.arcFrom(index).?.boundingBox();
             min_pos = vec2.min(min_pos, bounding_box[0]);
             max_pos = vec2.max(max_pos, bounding_box[1]);
         }

@@ -90,24 +90,24 @@ pub const Node = struct {
         return if (node.getPath().nextIndex(node.index)) |next_index| .{ .object_index = node.object_index, .index = next_index } else null;
     }
 
-    pub inline fn getPos(node: Node) [2]f32 {
-        return node.getPath().getPos(node.index);
+    pub inline fn pos(node: Node) [2]f32 {
+        return node.getPath().pos(node.index);
     }
 
-    pub inline fn getAngleFrom(node: Node) ?f32 {
-        return node.getPath().getAngleFrom(node.index);
+    pub inline fn angleFrom(node: Node) ?f32 {
+        return node.getPath().angleFrom(node.index);
     }
 
-    pub inline fn getAngleTo(node: Node) ?f32 {
-        return node.getPath().getAngleTo(node.index);
+    pub inline fn angleTo(node: Node) ?f32 {
+        return node.getPath().angleTo(node.index);
     }
 
-    pub inline fn getArcFrom(node: Node) ?geometry.Arc {
-        return node.getPath().getArcFrom(node.index);
+    pub inline fn arcFrom(node: Node) ?geometry.Arc {
+        return node.getPath().arcFrom(node.index);
     }
 
-    pub inline fn getArcTo(node: Node) ?geometry.Arc {
-        return node.getPath().getArcTo(node.index);
+    pub inline fn arcTo(node: Node) ?geometry.Arc {
+        return node.getPath().arcTo(node.index);
     }
 };
 

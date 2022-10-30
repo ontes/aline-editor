@@ -31,14 +31,14 @@ pub fn gen(buffer: *render.Buffer) !void {
     for (editor.selected_nodes.items) |node| {
         if (node.prev()) |prev_node| {
             if (!editor.isSelected(prev_node)) {
-                var arc = node.getArcTo().?;
+                var arc = node.arcTo().?;
                 arc.pos_b = vec2.add(arc.pos_b, getOffset());
                 try stroke.genArc(arc, color, buffer);
             }
         }
-        // try stroke.genCap(vec2.add(node.getPos(), getOffset()), null, null, color, buffer);
+        // try stroke.genCap(vec2.add(node.pos(), getOffset()), null, null, color, buffer);
         if (node.next()) |next_node| {
-            var arc = node.getArcFrom().?;
+            var arc = node.arcFrom().?;
             arc.pos_a = vec2.add(arc.pos_a, getOffset());
             if (editor.isSelected(next_node))
                 arc.pos_b = vec2.add(arc.pos_b, getOffset());
@@ -52,7 +52,7 @@ pub fn onEvent(event: platform.Event) !void {
         .key_press => |key| switch (key) {
             .mouse_left => {
                 for (editor.selected_nodes.items) |node|
-                    node.getObject().positions.items[node.index] = vec2.add(node.getPos(), getOffset());
+                    node.getObject().positions.items[node.index] = vec2.add(node.pos(), getOffset());
                 try editor.step();
                 _ = try editor.setMode(.select);
             },

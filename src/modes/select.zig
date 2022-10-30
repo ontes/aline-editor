@@ -17,9 +17,9 @@ pub inline fn deinit() void {}
 
 pub fn gen(buffer: *render.Buffer) !void {
     for (editor.selected_nodes.items) |node| {
-        try geometry.Circle.gen(.{ .pos = node.getPos(), .radius = 0.01 }, color, buffer);
+        try geometry.Circle.gen(.{ .pos = node.pos(), .radius = 0.01 }, color, buffer);
         if (node.next()) |next_node| if (editor.isSelected(next_node))
-            try stroke.genArc(node.getArcFrom().?, color, buffer);
+            try stroke.genArc(node.arcFrom().?, color, buffer);
     }
 }
 
@@ -42,7 +42,7 @@ fn select(pos: [2]f32) !void {
     while (i < editor.objects.items.len) : (i += 1) {
         const object_index = @intCast(u32, editor.objects.items.len - i - 1);
         const path = editor.objects.items[object_index].toPath();
-        if (selectedNode(path, pos, 0.04 * 0.04)) |index| {
+        if (selectedNode(path, pos, 0.05)) |index| {
             const node = editor.Node{ .object_index = object_index, .index = index };
             if (editor.findSelected(node)) |node_index| {
                 _ = editor.selected_nodes.swapRemove(node_index);
@@ -51,7 +51,7 @@ fn select(pos: [2]f32) !void {
             }
             return;
         }
-        if (selectedArc(path, pos, std.math.pi / 10.0)) |index| {
+        if (selectedArc(path, pos, 0.1)) |index| {
             const node = editor.Node{ .object_index = object_index, .index = index };
             const next_node = node.next().?;
             var allready_selected = true;
@@ -69,7 +69,7 @@ fn select(pos: [2]f32) !void {
             }
             return;
         }
-        if (path.isLooped() and path.isInside(pos)) {
+        if (path.isLooped() and path.containsPoint(pos)) {
             var allready_selected = true;
             var index: u32 = 0;
             while (index < path.len()) : (index += 1) {
@@ -91,23 +91,20 @@ fn select(pos: [2]f32) !void {
     }
 }
 
-fn selectedNode(path: geometry.Path, pos: [2]f32, max_norm: f32) ?u32 {
+fn selectedNode(path: geometry.Path, pos: [2]f32, max_diff: f32) ?u32 {
     var index: u32 = 0;
     while (index < path.len()) : (index += 1) {
-        const norm = vec2.norm(vec2.subtract(pos, path.getPos(index)));
-        if (norm < max_norm)
+        if (vec2.norm(vec2.subtract(pos, path.pos(index))) < max_diff * max_diff)
             return index;
     }
     return null;
 }
 
-fn selectedArc(path: geometry.Path, pos: [2]f32, max_angle_diff: f32) ?u32 {
+fn selectedArc(path: geometry.Path, pos: [2]f32, max_diff: f32) ?u32 {
     var index: u32 = 0;
     while (index < path.len()) : (index += 1) {
-        if (path.nextIndex(index)) |next_index| {
-            const angle = geometry.arcAngleFromPoint(path.getPos(index), path.getPos(next_index), pos);
-            const angle_diff = @fabs(angle - path.getAngleFrom(index).?);
-            if (angle_diff < max_angle_diff)
+        if (path.arcFrom(index)) |arc| {
+            if (@fabs(@tan(arc.angleOnPoint(pos) / 2) - @tan(arc.angle / 2)) < max_diff)
                 return index;
         }
     }

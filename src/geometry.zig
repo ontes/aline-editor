@@ -7,16 +7,25 @@ pub inline fn normal(vec: [2]f32) [2]f32 {
     return .{ -vec[1], vec[0] };
 }
 
+pub fn angleBetween(dir_a: [2]f32, dir_b: [2]f32) f32 {
+    return std.math.atan2(f32, dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0], dir_a[0] * dir_b[0] + dir_a[1] * dir_b[1]);
+}
+
+/// Solves equation pos_a + p * dir_a = pos_b + q * dir_b, returns p
+pub fn linesIntersection(pos_a: [2]f32, dir_a: [2]f32, pos_b: [2]f32, dir_b: [2]f32) f32 {
+    const pos = vec2.subtract(pos_b, pos_a);
+    return (pos[0] * dir_b[1] - pos[1] * dir_b[0]) / (dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0]);
+}
+
 pub const Arc = struct {
     pos_a: [2]f32,
     pos_b: [2]f32,
-    angle: f32,
+    angle: f32 = 0,
 
-    /// Get point on arc by a given angle (undefined for straight lines)
-    pub fn point(arc: Arc, point_angle: f32) [2]f32 {
-        std.debug.assert(arc.angle != 0);
-        const scale = @sin(point_angle) / @sin(arc.angle);
-        const rotation = mat2.rotate(0, 1, point_angle - arc.angle);
+    /// Get point on arc, param is in ragnge from 0 to 1
+    pub fn point(arc: Arc, param: f32) [2]f32 {
+        const scale = if (arc.angle == 0) param else @sin(arc.angle * param) / @sin(arc.angle);
+        const rotation = mat2.rotate(0, 1, arc.angle * (1 - param));
         return vec2.add(arc.pos_a, mat2.multiplyV(rotation, vec2.multiplyS(vec2.subtract(arc.pos_b, arc.pos_a), scale)));
     }
 
@@ -26,8 +35,8 @@ pub const Arc = struct {
         const line_center = vec2.divideS(vec2.add(arc.pos_a, arc.pos_b), 2);
         const line_normal = normal(vec2.subtract(line_center, arc.pos_a));
         return .{
-            .pos = vec2.add(line_center, vec2.divideS(line_normal, @tan(arc.angle))),
-            .radius = @fabs(vec2.abs(line_normal) / @sin(arc.angle)),
+            .pos = vec2.add(line_center, vec2.divideS(line_normal, -@tan(arc.angle))),
+            .radius = vec2.abs(line_normal) / @sin(@fabs(arc.angle)),
         };
     }
 
@@ -38,7 +47,7 @@ pub const Arc = struct {
             const circle = arc.toCircle();
             for ([4][2]f32{ .{ 0, 1 }, .{ 0, -1 }, .{ 1, 0 }, .{ -1, 0 } }) |direction| {
                 const pos = vec2.add(circle.pos, vec2.multiplyS(direction, circle.radius));
-                if (std.math.sign(arcAngleFromPoint(arc.pos_a, arc.pos_b, pos)) == std.math.sign(arc.angle)) {
+                if (std.math.sign(arc.angleOnPoint(pos)) == std.math.sign(arc.angle)) {
                     min_pos = vec2.min(min_pos, pos);
                     max_pos = vec2.max(max_pos, pos);
                 }
@@ -47,25 +56,30 @@ pub const Arc = struct {
         return .{ min_pos, max_pos };
     }
 
+    /// Get direction from pos_a
     pub fn dirA(arc: Arc) [2]f32 {
         const line_dir = vec2.normalize(vec2.subtract(arc.pos_b, arc.pos_a));
+        return mat2.multiplyV(mat2.rotate(0, 1, arc.angle), line_dir);
+    }
+
+    /// Get direction from pos_b
+    pub fn dirB(arc: Arc) [2]f32 {
+        const line_dir = vec2.normalize(vec2.subtract(arc.pos_a, arc.pos_b));
         return mat2.multiplyV(mat2.rotate(0, 1, -arc.angle), line_dir);
     }
 
-    pub fn dirB(arc: Arc) [2]f32 {
-        const line_dir = vec2.normalize(vec2.subtract(arc.pos_a, arc.pos_b));
-        return mat2.multiplyV(mat2.rotate(0, 1, arc.angle), line_dir);
+    /// Get angle of arc that contains given point, angle of given arc is ignored
+    pub fn angleOnPoint(arc: Arc, point_pos: [2]f32) f32 {
+        return -angleBetween(vec2.subtract(arc.pos_a, point_pos), vec2.subtract(point_pos, arc.pos_b));
+    }
+
+    /// Get param of arc that contains given point, angle of given arc is ignored
+    pub fn paramOnPoint(arc: Arc, point_pos: [2]f32) f32 {
+        const dir_a = vec2.normalize(vec2.subtract(arc.pos_a, point_pos));
+        const dir_b = vec2.normalize(vec2.subtract(arc.pos_b, point_pos));
+        return linesIntersection(arc.pos_a, vec2.subtract(arc.pos_b, arc.pos_a), point_pos, vec2.add(dir_a, dir_b));
     }
 };
-
-pub fn angleBetween(dir_a: [2]f32, dir_b: [2]f32) f32 {
-    return std.math.atan2(f32, dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0], dir_a[0] * dir_b[0] + dir_a[1] * dir_b[1]);
-}
-
-/// Get angle of an arc that contains given point.
-pub fn arcAngleFromPoint(pos_a: [2]f32, pos_b: [2]f32, point_pos: [2]f32) f32 {
-    return angleBetween(vec2.subtract(pos_a, point_pos), vec2.subtract(point_pos, pos_b));
-}
 
 pub const Path = struct {
     positions: []const [2]f32,
@@ -97,53 +111,50 @@ pub const Path = struct {
         return null;
     }
 
-    pub inline fn getPos(path: Path, index: u32) [2]f32 {
+    pub inline fn pos(path: Path, index: u32) [2]f32 {
         return path.positions[index];
     }
 
-    pub inline fn getAngleFrom(path: Path, index: u32) ?f32 {
+    pub inline fn angleFrom(path: Path, index: u32) ?f32 {
         return if (index < path.angles.len) path.angles[index] else null;
     }
 
-    pub inline fn getAngleTo(path: Path, index: u32) ?f32 {
+    pub inline fn angleTo(path: Path, index: u32) ?f32 {
         return if (path.prevIndex(index)) |prev_index| path.angles[prev_index] else null;
     }
 
-    pub inline fn getArcFrom(path: Path, index: u32) ?Arc {
+    pub inline fn arcFrom(path: Path, index: u32) ?Arc {
         return if (path.nextIndex(index)) |next_index| .{
-            .pos_a = path.getPos(index),
-            .pos_b = path.getPos(next_index),
-            .angle = path.getAngleFrom(index).?,
+            .pos_a = path.pos(index),
+            .pos_b = path.pos(next_index),
+            .angle = path.angleFrom(index).?,
         } else null;
     }
 
-    pub inline fn getArcTo(path: Path, index: u32) ?Arc {
+    pub inline fn arcTo(path: Path, index: u32) ?Arc {
         return if (path.prevIndex(index)) |prev_index| .{
-            .pos_a = path.getPos(prev_index),
-            .pos_b = path.getPos(index),
-            .angle = path.getAngleTo(index).?,
+            .pos_a = path.pos(prev_index),
+            .pos_b = path.pos(index),
+            .angle = path.angleTo(index).?,
         } else null;
     }
 
-    pub fn isInside(path: Path, pos: [2]f32) bool {
+    pub fn containsPoint(path: Path, point_pos: [2]f32) bool {
         std.debug.assert(path.isLooped());
         var inside = false;
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
-            inside = inside != isCrossingLine(pos, path.getPos(index), path.getPos(path.nextIndex(index).?));
-            inside = inside != isInArc(pos, path.getArcFrom(index).?);
+            const arc = path.arcFrom(index).?;
+
+            const crossing_line = (point_pos[1] < arc.pos_a[1]) != (point_pos[1] < arc.pos_b[1]) and
+                linesIntersection(point_pos, .{ 1, 0 }, arc.pos_a, vec2.subtract(arc.pos_b, arc.pos_a)) > 0;
+            inside = inside != crossing_line;
+
+            const point_angle = arc.angleOnPoint(point_pos);
+            const in_arc = std.math.sign(point_angle) == std.math.sign(arc.angle) and @fabs(point_angle) < @fabs(arc.angle);
+            inside = inside != in_arc;
         }
         return inside;
-    }
-
-    fn isCrossingLine(pos: [2]f32, pos_a: [2]f32, pos_b: [2]f32) bool {
-        return ((pos[1] < pos_a[1]) != (pos[1] < pos_b[1])) and
-            (pos[0] < (pos_b[0] - pos_a[0]) / (pos_b[1] - pos_a[1]) * (pos[1] - pos_a[1]) + pos_a[0]);
-    }
-
-    fn isInArc(pos: [2]f32, arc: Arc) bool {
-        const pos_angle = arcAngleFromPoint(arc.pos_a, arc.pos_b, pos);
-        return std.math.sign(pos_angle) == std.math.sign(arc.angle) and @fabs(pos_angle) < @fabs(arc.angle);
     }
 };
 
@@ -189,7 +200,7 @@ pub const Stroke = struct {
                     pos,
                     vec2.add(pos, normal_a),
                     vec2.add(pos, normal_b),
-                }, .angles = &.{ 0, arcAngleFromPoint(normal_a, normal_b, dir), 0 } }, color);
+                }, .angles = &.{ 0, Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, dir), 0 } }, color);
             },
             .bevel => {
                 try buffer.append(.{ .positions = &.{
@@ -199,7 +210,8 @@ pub const Stroke = struct {
                 }, .angles = &.{ 0, 0, 0 } }, color);
             },
             .miter => {
-                const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (dir[0] * dir_a[1] - dir[1] * dir_a[0]);
+                // const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (dir[0] * dir_a[1] - dir[1] * dir_a[0]);
+                const tip_dist = linesIntersection(.{ 0, 0 }, dir, normal_a, dir_a);
                 if (tip_dist > 0 and tip_dist < 8) {
                     try buffer.append(.{ .positions = &.{
                         pos,
@@ -234,18 +246,18 @@ pub const Stroke = struct {
     pub fn genPath(stroke: Stroke, path: Path, color: [4]u8, buffer: *render.Buffer) !void {
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
-            if (path.getArcFrom(index)) |arc_from| {
+            if (path.arcFrom(index)) |arc_from| {
                 try stroke.genArc(arc_from, color, buffer);
-                if (path.getArcTo(index)) |arc_to| {
-                    try stroke.genCap(path.getPos(index), arc_from.dirA(), arc_to.dirB(), color, buffer);
+                if (path.arcTo(index)) |arc_to| {
+                    try stroke.genCap(path.pos(index), arc_from.dirA(), arc_to.dirB(), color, buffer);
                 } else {
-                    try stroke.genCap(path.getPos(index), arc_from.dirA(), arc_from.dirA(), color, buffer);
+                    try stroke.genCap(path.pos(index), arc_from.dirA(), arc_from.dirA(), color, buffer);
                 }
-            } else if (path.getArcTo(index)) |arc_to| {
-                try stroke.genCap(path.getPos(index), arc_to.dirB(), arc_to.dirB(), color, buffer);
+            } else if (path.arcTo(index)) |arc_to| {
+                try stroke.genCap(path.pos(index), arc_to.dirB(), arc_to.dirB(), color, buffer);
             } else {
-                try stroke.genCap(path.getPos(index), .{ 1, 0 }, .{ 1, 0 }, color, buffer);
-                try stroke.genCap(path.getPos(index), .{ -1, 0 }, .{ -1, 0 }, color, buffer);
+                try stroke.genCap(path.pos(index), .{ 1, 0 }, .{ 1, 0 }, color, buffer);
+                try stroke.genCap(path.pos(index), .{ -1, 0 }, .{ -1, 0 }, color, buffer);
             }
         }
     }

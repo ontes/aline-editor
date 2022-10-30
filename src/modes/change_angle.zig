@@ -23,7 +23,7 @@ pub fn init() !void {
 pub fn deinit() void {}
 
 pub fn gen(buffer: *render.Buffer) !void {
-    var arc = getNode(0).getArcFrom().?;
+    var arc = getNode(0).arcFrom().?;
     arc.angle = getAngle();
     try stroke.genArc(arc, color, buffer);
 }
@@ -50,5 +50,5 @@ inline fn getNode(index: usize) *editor.Node {
 }
 
 fn getAngle() f32 {
-    return geometry.arcAngleFromPoint(getNode(0).getPos(), getNode(1).getPos(), input.mouse_pos);
+    return getNode(0).arcFrom().?.angleOnPoint(input.mouse_pos);
 }
