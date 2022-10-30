@@ -1,5 +1,5 @@
 const std = @import("std");
-const vec2 = @import("../linalg.zig").vec(f32, 2);
+const vec2 = @import("../linalg.zig").vec(2, f32);
 const editor = @import("../editor.zig");
 const input = @import("../input.zig");
 const geometry = @import("../geometry.zig");
@@ -39,7 +39,7 @@ pub fn onEvent(event: platform.Event) !void {
     switch (event) {
         .key_release => |key| switch (key) {
             .mouse_left => {
-                if (vec2.norm(vec2.subtract(input.mouse_pos, getNode().getPath().pos(0))) < 0.05 * 0.05) { // ending by creating a loop
+                if (vec2.norm(input.mouse_pos - getNode().getPath().pos(0)) < 0.05 * 0.05) { // ending by creating a loop
                     try getNode().getObject().loop(0);
                     getNode().index = 0;
                     _ = try editor.setMode(.select);

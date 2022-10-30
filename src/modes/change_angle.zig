@@ -1,5 +1,5 @@
 const std = @import("std");
-const vec2 = @import("../linalg.zig").vec(f32, 2);
+const vec2 = @import("../linalg.zig").vec(2, f32);
 const editor = @import("../editor.zig");
 const input = @import("../input.zig");
 const geometry = @import("../geometry.zig");

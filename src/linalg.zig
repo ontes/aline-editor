@@ -1,276 +1,107 @@
 const std = @import("std");
 
-pub fn vec(comptime Scalar: type, comptime n: comptime_int) type {
+pub fn vec(comptime len: comptime_int, comptime Scalar: type) type {
     return struct {
-        pub const Vec = [n]Scalar;
+        pub const Vector = @Vector(len, Scalar);
 
-        pub fn zeroes() Vec {
-            return .{0} ** n;
+        pub const zero = splat(0);
+
+        pub inline fn splat(sc: Scalar) Vector {
+            return @splat(len, sc);
         }
 
-        pub fn negate(v: Vec) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = -v[i];
-            return res;
+        pub inline fn dot(v1: Vector, v2: Vector) Scalar {
+            return @reduce(.Add, v1 * v2);
         }
 
-        pub fn add(v1: Vec, v2: Vec) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v1[i] + v2[i];
-            return res;
+        pub inline fn norm(v: Vector) Scalar {
+            return @reduce(.Add, v * v);
         }
 
-        pub fn subtract(v1: Vec, v2: Vec) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v1[i] - v2[i];
-            return res;
-        }
-
-        pub fn multiply(v1: Vec, v2: Vec) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v1[i] * v2[i];
-            return res;
-        }
-
-        pub fn divide(v1: Vec, v2: Vec) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v1[i] / v2[i];
-            return res;
-        }
-
-        pub fn addS(v: Vec, s: Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v[i] + s;
-            return res;
-        }
-
-        pub fn subtractS(v: Vec, s: Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v[i] - s;
-            return res;
-        }
-
-        pub fn multiplyS(v: Vec, s: Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v[i] * s;
-            return res;
-        }
-
-        pub fn multiplySH(v: Vec, s: Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n - 1) : (i += 1)
-                res[i] = v[i] * s;
-            return res;
-        }
-
-        pub fn divideS(v: Vec, s: Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v[i] / s;
-            return res;
-        }
-
-        pub fn divideSH(v: Vec, s: Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n - 1) : (i += 1)
-                res[i] = v[i] / s;
-            return res;
-        }
-
-        pub fn min(v1: Vec, v2: Vec) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = std.math.min(v1[i], v2[i]);
-            return res;
-        }
-
-        pub fn max(v1: Vec, v2: Vec) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = std.math.max(v1[i], v2[i]);
-            return res;
-        }
-
-        pub fn sum(v: Vec) Scalar {
-            var res: Scalar = 0;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res += v[i];
-            return res;
-        }
-
-        pub fn dot(v1: Vec, v2: Vec) Scalar {
-            return sum(multiply(v1, v2));
-        }
-
-        pub fn norm(v: Vec) Scalar {
-            var res: Scalar = 0;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res += v[i] * v[i];
-            return res;
-        }
-
-        pub fn abs(v: Vec) Scalar {
+        pub inline fn abs(v: Vector) Scalar {
             return @sqrt(norm(v));
         }
 
-        pub fn normalize(v: Vec) Vec {
-            return divideS(v, abs(v));
-        }
-
-        pub fn fromLower(v: [n - 1]Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n - 1) : (i += 1)
-                res[i] = v[i];
-            res[n - 1] = 1;
-            return res;
-        }
-
-        pub fn fromHigher(v: [n + 1]Scalar) Vec {
-            var res: Vec = undefined;
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i] = v[i] / v[n];
-            return res;
+        pub inline fn normalize(v: Vector) Vector {
+            return v / splat(abs(v));
         }
     };
 }
 
-// Mat[col][row]
-pub fn mat(comptime Scalar: type, comptime n: comptime_int) type {
+// matrix[row][col]
+pub fn mat(comptime len: comptime_int, comptime Scalar: type) type {
     return struct {
-        pub const Mat = [n][n]Scalar;
-        pub const Vec = [n]Scalar;
+        const vector = vec(len, Scalar);
+        const Vector = vector.Vector;
+        pub const Matrix = [len]Vector;
 
-        pub fn zeroes() Mat {
-            return .{.{0} ** n} ** n;
-        }
+        pub const zero = [_]Vector{vector.zero} ** len;
 
-        pub fn identity() Mat {
-            var res = zeroes();
+        pub const id = id: {
+            var res = zero;
             comptime var i = 0;
-            inline while (i < n) : (i += 1)
+            inline while (i < len) : (i += 1)
                 res[i][i] = 1;
-            return res;
-        }
+            break :id res;
+        };
 
-        pub fn multiply(m1: Mat, m2: Mat) Mat {
-            var res = zeroes();
+        pub fn mult(m1: Matrix, m2: Matrix) Matrix {
+            var res = zero;
             comptime var i = 0;
-            inline while (i < n) : (i += 1) {
+            inline while (i < len) : (i += 1) {
                 comptime var j = 0;
-                inline while (j < n) : (j += 1) {
+                inline while (j < len) : (j += 1) {
                     comptime var k = 0;
-                    inline while (k < n) : (k += 1) {
-                        res[i][j] += m1[k][j] * m2[i][k];
+                    inline while (k < len) : (k += 1) {
+                        res[i][j] += m1[i][k] * m2[k][j];
                     }
                 }
             }
             return res;
         }
 
-        pub fn multiplyV(m: Mat, v: Vec) Vec {
-            var res: Vec = .{0} ** n;
+        pub fn multVec(m: Matrix, v: Vector) Vector {
+            var res: Vector = undefined;
             comptime var i = 0;
-            inline while (i < n) : (i += 1) {
-                comptime var j = 0;
-                inline while (j < n) : (j += 1) {
-                    res[i] += m[j][i] * v[j];
-                }
-            }
+            inline while (i < len) : (i += 1)
+                res[i] = @reduce(.Add, m[i] * v);
             return res;
         }
 
-        pub fn multiplyVH(m: Mat, v: [n - 1]Scalar) [n - 1]Scalar {
-            const vh = vec(Scalar, n - 1).toHomogenous(v);
-            return vec(Scalar, n - 1).fromHomogenous(multiplyV(m, vh));
-        }
-
-        pub fn transpose(m: Mat) Mat {
-            var res: Mat = undefined;
+        pub fn transpose(m: Matrix) Matrix {
+            var res: Matrix = undefined;
             comptime var i = 0;
-            inline while (i < n) : (i += 1) {
+            inline while (i < len) : (i += 1) {
                 comptime var j = 0;
-                inline while (j < n) : (j += 1) {
+                inline while (j < len) : (j += 1) {
                     res[i][j] = m[j][i];
                 }
             }
             return res;
         }
 
-        pub fn translate(v: [n - 1]Scalar) Mat {
-            var res = identity();
+        pub fn translate(v: @Vector(len - 1, Scalar)) Matrix {
+            var res = id;
             comptime var i = 0;
-            inline while (i < n - 1) : (i += 1)
-                res[n - 1][i] = v[i];
+            inline while (i < len - 1) : (i += 1)
+                res[len - 1][i] = v[i];
             return res;
         }
 
-        pub fn scale(v: Vec) Mat {
-            var res = identity();
+        pub fn scale(v: Vector) Matrix {
+            var res = id;
             comptime var i = 0;
-            inline while (i < n) : (i += 1)
+            inline while (i < len) : (i += 1)
                 res[i][i] = v[i];
             return res;
         }
 
-        pub fn scaleS(s: Scalar) Mat {
-            var res = identity();
-            comptime var i = 0;
-            inline while (i < n) : (i += 1)
-                res[i][i] = s;
-            return res;
-        }
-
-        pub fn scaleSH(s: Scalar) Mat {
-            var res = identity();
-            comptime var i = 0;
-            inline while (i < n - 1) : (i += 1)
-                res[i][i] = s;
-            return res;
-        }
-
-        pub fn rotate(comptime axis1: comptime_int, comptime axis2: comptime_int, angle: Scalar) Mat {
-            var res = identity();
+        pub fn rotate(comptime axis1: comptime_int, comptime axis2: comptime_int, angle: Scalar) Matrix {
+            var res = id;
             res[axis1][axis1] = @cos(angle);
-            res[axis1][axis2] = @sin(angle);
-            res[axis2][axis1] = -@sin(angle);
+            res[axis1][axis2] = -@sin(angle);
+            res[axis2][axis1] = @sin(angle);
             res[axis2][axis2] = @cos(angle);
-            return res;
-        }
-
-        pub fn fromLower(v: [n - 1][n - 1]Scalar) Mat {
-            var res: Mat = identity();
-            comptime var i = 0;
-            inline while (i < n - 1) : (i += 1) {
-                comptime var j = 0;
-                inline while (j < n - 1) : (j += 1) {
-                    res[i][j] = v[i][j];
-                }
-            }
             return res;
         }
     };

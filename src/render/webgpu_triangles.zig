@@ -4,8 +4,8 @@ const render = @import("../render.zig");
 const webgpu = @import("../bindings/webgpu.zig");
 const webgpu_utils = @import("webgpu_utils.zig");
 const geometry = @import("../geometry.zig");
-const vec2 = @import("../linalg.zig").vec(f32, 2);
-const mat2 = @import("../linalg.zig").mat(f32, 2);
+const vec2 = @import("../linalg.zig").vec(2, f32);
+const mat2 = @import("../linalg.zig").mat(2, f32);
 
 const step_angle = std.math.pi / 32.0;
 

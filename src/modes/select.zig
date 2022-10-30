@@ -1,5 +1,5 @@
 const std = @import("std");
-const vec2 = @import("../linalg.zig").vec(f32, 2);
+const vec2 = @import("../linalg.zig").vec(2, f32);
 const editor = @import("../editor.zig");
 const input = @import("../input.zig");
 const render = @import("../render.zig");
@@ -37,7 +37,7 @@ pub fn onEvent(event: platform.Event) !void {
     }
 }
 
-fn select(pos: [2]f32) !void {
+fn select(pos: geometry.Vec2) !void {
     var i: u32 = 0;
     while (i < editor.objects.items.len) : (i += 1) {
         const object_index = @intCast(u32, editor.objects.items.len - i - 1);
@@ -91,16 +91,16 @@ fn select(pos: [2]f32) !void {
     }
 }
 
-fn selectedNode(path: geometry.Path, pos: [2]f32, max_diff: f32) ?u32 {
+fn selectedNode(path: geometry.Path, pos: geometry.Vec2, max_diff: f32) ?u32 {
     var index: u32 = 0;
     while (index < path.len()) : (index += 1) {
-        if (vec2.norm(vec2.subtract(pos, path.pos(index))) < max_diff * max_diff)
+        if (vec2.norm(pos - path.pos(index)) < max_diff * max_diff)
             return index;
     }
     return null;
 }
 
-fn selectedArc(path: geometry.Path, pos: [2]f32, max_diff: f32) ?u32 {
+fn selectedArc(path: geometry.Path, pos: geometry.Vec2, max_diff: f32) ?u32 {
     var index: u32 = 0;
     while (index < path.len()) : (index += 1) {
         if (path.arcFrom(index)) |arc| {

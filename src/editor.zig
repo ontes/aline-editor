@@ -8,7 +8,7 @@ const history = @import("history.zig");
 
 pub const Object = struct {
     allocator: std.mem.Allocator,
-    positions: std.ArrayListUnmanaged([2]f32) = .{},
+    positions: std.ArrayListUnmanaged(geometry.Vec2) = .{},
     angles: std.ArrayListUnmanaged(f32) = .{},
     color: [4]u8 = .{ 32, 32, 32, 255 },
     stroke: geometry.Stroke = .{ .width = 0.005, .cap = .round },
@@ -18,7 +18,7 @@ pub const Object = struct {
         return .{ .positions = object.positions.items, .angles = object.angles.items };
     }
 
-    pub fn init(allocator: std.mem.Allocator, first_pos: [2]f32) !Object {
+    pub fn init(allocator: std.mem.Allocator, first_pos: geometry.Vec2) !Object {
         var path = Object{ .allocator = allocator };
         try path.positions.append(allocator, first_pos);
         return path;
@@ -36,7 +36,7 @@ pub const Object = struct {
         try object.stroke.genPath(path, object.stroke_color, buffer);
     }
 
-    pub fn append(object: *Object, pos: [2]f32, angle: f32) !void {
+    pub fn append(object: *Object, pos: geometry.Vec2, angle: f32) !void {
         std.debug.assert(!object.toPath().isLooped());
         try object.positions.append(object.allocator, pos);
         try object.angles.append(object.allocator, angle);
@@ -48,7 +48,7 @@ pub const Object = struct {
     }
 
     pub fn reverse(object: *Object) void {
-        std.mem.reverse([2]f32, object.positions.items);
+        std.mem.reverse(geometry.Vec2, object.positions.items);
         const loop_angle = if (object.toPath().isLooped()) object.angles.pop() else null;
         std.mem.reverse(f32, object.angles.items);
         if (loop_angle) |angle| object.angles.appendAssumeCapacity(angle);
@@ -58,7 +58,7 @@ pub const Object = struct {
 
     pub fn rotate(object: *Object, amount: usize) void {
         std.debug.assert(object.toPath().isLooped());
-        std.mem.rotate([2]f32, object.positions.items, amount);
+        std.mem.rotate(geometry.Vec2, object.positions.items, amount);
         std.mem.rotate(f32, object.angles.items, amount);
     }
 
@@ -90,7 +90,7 @@ pub const Node = struct {
         return if (node.getPath().nextIndex(node.index)) |next_index| .{ .object_index = node.object_index, .index = next_index } else null;
     }
 
-    pub inline fn pos(node: Node) [2]f32 {
+    pub inline fn pos(node: Node) geometry.Vec2 {
         return node.getPath().pos(node.index);
     }
 

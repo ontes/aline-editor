@@ -4,7 +4,7 @@ const render = @import("../render.zig");
 const webgpu = @import("../bindings/webgpu.zig");
 const webgpu_utils = @import("webgpu_utils.zig");
 const geometry = @import("../geometry.zig");
-const vec2 = @import("../linalg.zig").vec(f32, 2);
+const vec2 = @import("../linalg.zig").vec(2, f32);
 
 const err = error.RendererError;
 
@@ -80,8 +80,8 @@ const fs_source =
 const PathEntry = extern struct {
     offset: u32,
     len: u32,
-    min_pos: [2]f32 align(8),
-    max_pos: [2]f32 align(8),
+    min_pos: geometry.Vec2 align(8),
+    max_pos: geometry.Vec2 align(8),
     color: [4]f32 align(16),
 };
 
@@ -193,7 +193,7 @@ pub const Buffer = struct {
     path_count: u32 = 0,
 
     paths: std.ArrayListUnmanaged(PathEntry) = .{},
-    positions: std.ArrayListUnmanaged([2]f32) = .{},
+    positions: std.ArrayListUnmanaged(geometry.Vec2) = .{},
     angles: std.ArrayListUnmanaged(f32) = .{},
 
     pub fn init(context: Context, allocator: std.mem.Allocator) Buffer {
@@ -230,8 +230,8 @@ pub const Buffer = struct {
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
             const bounding_box = path.arcFrom(index).?.boundingBox();
-            min_pos = vec2.min(min_pos, bounding_box[0]);
-            max_pos = vec2.max(max_pos, bounding_box[1]);
+            min_pos = @min(min_pos, bounding_box[0]);
+            max_pos = @max(max_pos, bounding_box[1]);
         }
 
         try buffer.paths.append(buffer.allocator, .{
@@ -247,7 +247,7 @@ pub const Buffer = struct {
 
     pub fn flush(buffer: *Buffer) void {
         const paths_size = buffer.paths.items.len * @sizeOf(PathEntry);
-        const positions_size = buffer.positions.items.len * @sizeOf([2]f32);
+        const positions_size = buffer.positions.items.len * @sizeOf(geometry.Vec2);
         const angles_size = buffer.angles.items.len * @sizeOf(f32);
 
         if (paths_size > buffer.paths_buffer.getSize()) {
@@ -261,7 +261,7 @@ pub const Buffer = struct {
             buffer.positions_buffer.destroy();
             buffer.positions_buffer = buffer.context.device.createBuffer(&.{
                 .usage = .{ .storage = true, .copy_dst = true },
-                .size = buffer.positions.capacity * @sizeOf([2]f32),
+                .size = buffer.positions.capacity * @sizeOf(geometry.Vec2),
             });
         }
         if (angles_size > buffer.angles_buffer.getSize()) {

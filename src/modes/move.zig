@@ -1,5 +1,5 @@
 const std = @import("std");
-const vec2 = @import("../linalg.zig").vec(f32, 2);
+const vec2 = @import("../linalg.zig").vec(2, f32);
 const editor = @import("../editor.zig");
 const input = @import("../input.zig");
 const geometry = @import("../geometry.zig");
@@ -9,10 +9,10 @@ const render = @import("../render.zig");
 const color = [4]u8{ 255, 32, 32, 255 };
 const stroke = geometry.Stroke{ .width = 0.005, .cap = .none };
 
-var start_pos: [2]f32 = undefined;
+var start_pos: geometry.Vec2 = undefined;
 
-inline fn getOffset() [2]f32 {
-    return vec2.subtract(input.mouse_pos, start_pos);
+inline fn getOffset() geometry.Vec2 {
+    return input.mouse_pos - start_pos;
 }
 
 pub fn canInit() bool {
@@ -32,16 +32,15 @@ pub fn gen(buffer: *render.Buffer) !void {
         if (node.prev()) |prev_node| {
             if (!editor.isSelected(prev_node)) {
                 var arc = node.arcTo().?;
-                arc.pos_b = vec2.add(arc.pos_b, getOffset());
+                arc.pos_b = arc.pos_b + getOffset();
                 try stroke.genArc(arc, color, buffer);
             }
         }
-        // try stroke.genCap(vec2.add(node.pos(), getOffset()), null, null, color, buffer);
         if (node.next()) |next_node| {
             var arc = node.arcFrom().?;
-            arc.pos_a = vec2.add(arc.pos_a, getOffset());
+            arc.pos_a = arc.pos_a + getOffset();
             if (editor.isSelected(next_node))
-                arc.pos_b = vec2.add(arc.pos_b, getOffset());
+                arc.pos_b = arc.pos_b + getOffset();
             try stroke.genArc(arc, color, buffer);
         }
     }
@@ -52,7 +51,7 @@ pub fn onEvent(event: platform.Event) !void {
         .key_press => |key| switch (key) {
             .mouse_left => {
                 for (editor.selected_nodes.items) |node|
-                    node.getObject().positions.items[node.index] = vec2.add(node.pos(), getOffset());
+                    node.getObject().positions.items[node.index] = node.pos() + getOffset();
                 try editor.step();
                 _ = try editor.setMode(.select);
             },
