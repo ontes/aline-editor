@@ -9,8 +9,16 @@ pub inline fn normal(vec: Vec2) Vec2 {
     return .{ -vec[1], vec[0] };
 }
 
+pub inline fn rotate(vec: Vec2, angle: f32) Vec2 {
+    return mat2.multVec(mat2.rotate(0, 1, angle), vec);
+}
+
 pub fn angleBetween(dir_a: Vec2, dir_b: Vec2) f32 {
     return std.math.atan2(f32, dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0], dir_a[0] * dir_b[0] + dir_a[1] * dir_b[1]);
+}
+
+pub inline fn oppositeAngle(angle: f32) f32 {
+    return if (angle > 0) std.math.pi - angle else -std.math.pi - angle;
 }
 
 /// Solves equation pos_a + p * dir_a = pos_b + q * dir_b, returns p
@@ -27,8 +35,8 @@ pub const Arc = struct {
     /// Get point on arc, param is in ragnge from 0 to 1
     pub fn point(arc: Arc, param: f32) Vec2 {
         const scale = if (arc.angle == 0) param else @sin(arc.angle * param) / @sin(arc.angle);
-        const rotation = mat2.rotate(0, 1, arc.angle * (1 - param));
-        return arc.pos_a + mat2.multVec(rotation, (arc.pos_b - arc.pos_a) * vec2.splat(scale));
+        const angle = arc.angle * (1 - param);
+        return arc.pos_a + rotate(arc.pos_b - arc.pos_a, angle) * vec2.splat(scale);
     }
 
     /// Get underlying circle (undefined for straight lines)
@@ -60,19 +68,17 @@ pub const Arc = struct {
 
     /// Get direction from pos_a
     pub fn dirA(arc: Arc) Vec2 {
-        const line_dir = vec2.normalize(arc.pos_b - arc.pos_a);
-        return mat2.multVec(mat2.rotate(0, 1, arc.angle), line_dir);
+        return rotate(arc.pos_b - arc.pos_a, arc.angle);
     }
 
     /// Get direction from pos_b
     pub fn dirB(arc: Arc) Vec2 {
-        const line_dir = vec2.normalize(arc.pos_a - arc.pos_b);
-        return mat2.multVec(mat2.rotate(0, 1, -arc.angle), line_dir);
+        return rotate(arc.pos_a - arc.pos_b, -arc.angle);
     }
 
     /// Get angle of arc that contains given point, angle of given arc is ignored
     pub fn angleOnPoint(arc: Arc, point_pos: Vec2) f32 {
-        return -angleBetween(arc.pos_a - point_pos, point_pos - arc.pos_b);
+        return oppositeAngle(angleBetween(arc.pos_a - point_pos, arc.pos_b - point_pos));
     }
 
     /// Get param of arc that contains given point, angle of given arc is ignored
@@ -96,7 +102,6 @@ pub const Path = struct {
         return path.positions.len == path.angles.len;
     }
 
-    // Returns number of vertices
     pub inline fn len(path: Path) u32 {
         return @intCast(u32, path.positions.len);
     }
@@ -147,14 +152,12 @@ pub const Path = struct {
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
             const arc = path.arcFrom(index).?;
-
-            const crossing_line = (point_pos[1] < arc.pos_a[1]) != (point_pos[1] < arc.pos_b[1]) and
-                linesIntersection(point_pos, .{ 1, 0 }, arc.pos_a, arc.pos_b - arc.pos_a) > 0;
-            inside = inside != crossing_line;
-
+            if ((point_pos[1] < arc.pos_a[1]) != (point_pos[1] < arc.pos_b[1]) and
+                linesIntersection(point_pos, .{ 1, 0 }, arc.pos_a, arc.pos_b - arc.pos_a) > 0)
+                inside = !inside;
             const point_angle = arc.angleOnPoint(point_pos);
-            const in_arc = std.math.sign(point_angle) == std.math.sign(arc.angle) and @fabs(point_angle) < @fabs(arc.angle);
-            inside = inside != in_arc;
+            if (std.math.sign(point_angle) == std.math.sign(arc.angle) and @fabs(point_angle) < @fabs(arc.angle))
+                inside = !inside;
         }
         return inside;
     }
@@ -165,13 +168,10 @@ pub const Circle = struct {
     radius: f32,
 
     pub fn gen(circle: Circle, color: [4]u8, buffer: *render.Buffer) !void {
-        try buffer.append(.{ .positions = &.{
-            circle.pos + Vec2{ -circle.radius, 0 },
-            circle.pos + Vec2{ circle.radius, 0 },
-        }, .angles = &.{
-            std.math.pi / 2.0,
-            std.math.pi / 2.0,
-        } }, color);
+        try buffer.append(.{
+            .positions = &.{ circle.pos + Vec2{ -circle.radius, 0 }, circle.pos + Vec2{ circle.radius, 0 } },
+            .angles = &.{ std.math.pi / 2.0, std.math.pi / 2.0 },
+        }, color);
     }
 };
 
@@ -186,21 +186,25 @@ pub const Stroke = struct {
         miter,
     };
 
-    // Generate cap from two directions (normalized, facing out from the cap)
+    // Generate cap from two directions (facing out from the cap)
     pub fn genCap(stroke: Stroke, pos: Vec2, dir_a: Vec2, dir_b: Vec2, color: [4]u8, buffer: *render.Buffer) !void {
-        if (vec2.dot(dir_a, dir_b) == 0) return; // directions are opposite, no cap is needed
+        if (vec2.dot(dir_a, dir_b) == 0)
+            return; // directions are opposite, no cap is needed
 
-        const dir = vec2.normalize(dir_a + dir_b) * vec2.splat(-stroke.width);
-        const sign: f32 = if (vec2.dot(normal(dir_a), dir_b) >= 0) 1 else -1;
-        const normal_a = normal(dir_a) * vec2.splat(-sign * stroke.width);
-        const normal_b = normal(dir_b) * vec2.splat(sign * stroke.width);
+        const sdir_a = vec2.normalize(-dir_a) * vec2.splat(stroke.width);
+        const sdir_b = vec2.normalize(-dir_b) * vec2.splat(stroke.width);
+        const sdir = vec2.normalize(sdir_a + sdir_b) * vec2.splat(stroke.width);
+
+        const side = vec2.dot(normal(sdir_a), sdir_b) < 0;
+        const normal_a = if (side) -normal(sdir_a) else normal(sdir_a);
+        const normal_b = if (side) normal(sdir_b) else -normal(sdir_b);
 
         switch (stroke.cap) {
             .none => {},
             .round => {
                 try buffer.append(.{
                     .positions = &.{ pos, pos + normal_a, pos + normal_b },
-                    .angles = &.{ 0, Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, dir), 0 },
+                    .angles = &.{ 0, Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, sdir), 0 },
                 }, color);
             },
             .bevel => {
@@ -210,22 +214,15 @@ pub const Stroke = struct {
                 }, color);
             },
             .miter => {
-                // const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (dir[0] * dir_a[1] - dir[1] * dir_a[0]);
-                const tip_dist = linesIntersection(.{ 0, 0 }, dir, normal_a, dir_a);
+                const tip_dist = linesIntersection(.{ 0, 0 }, sdir, normal_a, dir_a);
                 if (tip_dist > 0 and tip_dist < 8) {
                     try buffer.append(.{
-                        .positions = &.{ pos, pos + normal_a, pos + dir * vec2.splat(tip_dist), pos + normal_b },
+                        .positions = &.{ pos, pos + normal_a, pos + sdir * vec2.splat(tip_dist), pos + normal_b },
                         .angles = &.{ 0, 0, 0, 0 },
                     }, color);
                 } else {
                     try buffer.append(.{
-                        .positions = &.{
-                            pos,
-                            pos + normal_a,
-                            pos + normal_a - dir_a * vec2.splat(stroke.width),
-                            pos + normal_b - dir_b * vec2.splat(stroke.width),
-                            pos + normal_b,
-                        },
+                        .positions = &.{ pos, pos + normal_a, pos + normal_a + sdir_a, pos + normal_b + sdir_b, pos + normal_b },
                         .angles = &.{ 0, 0, 0, 0, 0 },
                     }, color);
                 }
@@ -234,8 +231,8 @@ pub const Stroke = struct {
     }
 
     pub fn genArc(stroke: Stroke, arc: Arc, color: [4]u8, buffer: *render.Buffer) !void {
-        const normal_a = normal(arc.dirA()) * vec2.splat(stroke.width);
-        const normal_b = normal(arc.dirB()) * vec2.splat(stroke.width);
+        const normal_a = vec2.normalize(normal(arc.dirA())) * vec2.splat(stroke.width);
+        const normal_b = vec2.normalize(normal(arc.dirB())) * vec2.splat(stroke.width);
         try buffer.append(.{
             .positions = &.{ arc.pos_a + normal_a, arc.pos_b - normal_b, arc.pos_b + normal_b, arc.pos_a - normal_a },
             .angles = &.{ arc.angle, 0, -arc.angle, 0 },
