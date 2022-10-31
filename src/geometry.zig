@@ -80,13 +80,6 @@ pub const Arc = struct {
     pub fn angleOnPoint(arc: Arc, point_pos: Vec2) f32 {
         return oppositeAngle(angleBetween(arc.pos_a - point_pos, arc.pos_b - point_pos));
     }
-
-    /// Get param of arc that contains given point, angle of given arc is ignored
-    pub fn paramOnPoint(arc: Arc, point_pos: Vec2) f32 {
-        const dir_a = vec2.normalize(arc.pos_a - point_pos);
-        const dir_b = vec2.normalize(arc.pos_b - point_pos);
-        return linesIntersection(arc.pos_a, arc.pos_b - arc.pos_a, point_pos, dir_a + dir_b);
-    }
 };
 
 pub const Path = struct {

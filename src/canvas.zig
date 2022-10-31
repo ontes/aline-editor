@@ -46,6 +46,13 @@ pub const Object = struct {
         try object.angles.append(object.allocator, angle);
     }
 
+    pub fn split(object: *Object, index: u32, param: f32) !void {
+        const arc = object.toPath().arcFrom(index).?;
+        try object.positions.insert(object.allocator, index + 1, arc.point(param));
+        object.angles.items[index] = arc.angle * param;
+        try object.angles.insert(object.allocator, index + 1, arc.angle * (1 - param));
+    }
+
     pub fn reverse(object: *Object) void {
         std.mem.reverse(geometry.Vec2, object.positions.items);
         const loop_angle = if (object.toPath().isLooped()) object.angles.pop() else null;

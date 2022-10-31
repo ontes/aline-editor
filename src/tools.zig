@@ -64,6 +64,7 @@ const Tool = enum {
     append,
     move,
     change_angle,
+    split,
 
     fn namespace(comptime md: Tool) type {
         return switch (md) {
@@ -71,6 +72,7 @@ const Tool = enum {
             .append => append,
             .move => move,
             .change_angle => change_angle,
+            .split => split,
         };
     }
 
@@ -399,6 +401,52 @@ const change_angle = struct {
 
     fn onMouseRelease() !void {
         nodes.items[0].getObject().angles.items[nodes.items[0].index] = getAngle();
+        _ = try setTool(.select);
+        try history.step();
+    }
+};
+
+const split = struct {
+    inline fn getParam() f32 {
+        const arc = nodes.items[0].arcFrom().?;
+        if (arc.angle == 0) {
+            return geometry.linesIntersection(arc.pos_a, arc.pos_b - arc.pos_a, mouse_pos, geometry.normal(arc.pos_b - arc.pos_a));
+        } else {
+            const center = arc.toCircle().pos;
+            return geometry.angleBetween(mouse_pos - center, arc.pos_a - center) / 2 / arc.angle;
+        }
+    }
+
+    fn canInit() bool {
+        return nodes.items.len == 2 and nodes.items[0].object_index == nodes.items[1].object_index and
+            ((if (nodes.items[0].next()) |next_node| next_node.index == nodes.items[1].index else false) or
+            (if (nodes.items[0].prev()) |prev_node| prev_node.index == nodes.items[1].index else false));
+    }
+
+    fn init() !void {
+        if (nodes.items[0].prev()) |prev_node| if (prev_node.index == nodes.items[1].index)
+            std.mem.swap(Node, &nodes.items[0], &nodes.items[1]);
+        try updateToolBuffer();
+    }
+
+    fn deinit() void {}
+
+    fn updateToolBuffer() !void {
+        tool_buffer.clear();
+        const pos = nodes.items[0].arcFrom().?.point(getParam());
+        try geometry.Circle.gen(.{ .pos = pos, .radius = preview_stroke.width * 2 }, preview_color, &tool_buffer);
+        tool_buffer.flush();
+    }
+
+    fn onMouseMove() !void {
+        try updateToolBuffer();
+    }
+
+    fn onMousePress() !void {}
+
+    fn onMouseRelease() !void {
+        try nodes.items[0].getObject().split(nodes.items[0].index, getParam());
+        _ = nodes.swapRemove(0);
         _ = try setTool(.select);
         try history.step();
     }

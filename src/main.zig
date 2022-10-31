@@ -112,6 +112,7 @@ fn onEvent(event: platform.Event, _: platform.Window) !void {
             .a => _ = try tools.setTool(.append),
             .g => _ = try tools.setTool(.move),
             .d => _ = try tools.setTool(.change_angle),
+            .s => _ = try tools.setTool(.split),
             .left_shift, .right_shift => tools.onShiftRelease(),
             .left_ctrl, .right_ctrl => ctrl_pressed = false,
             else => {},
