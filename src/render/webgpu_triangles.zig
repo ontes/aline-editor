@@ -102,7 +102,7 @@ pub const Context = struct {
         context.device.destroy();
     }
 
-    pub fn updateSize(context: *Context, size: [2]u32) void {
+    pub fn onWindowResize(context: *Context, size: [2]u32) void {
         context.swapchain = webgpu_utils.createSwapchain(context.device, context.surface, size);
     }
 
