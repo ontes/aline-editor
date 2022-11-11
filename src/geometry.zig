@@ -87,7 +87,6 @@ pub const Path = struct {
     angles: []const f32,
 
     pub fn gen(path: Path, color: [4]u8, buffer: *render.Buffer) !void {
-        std.debug.assert(path.isLooped());
         try buffer.append(path, color);
     }
 
@@ -99,44 +98,20 @@ pub const Path = struct {
         return @intCast(u32, path.positions.len);
     }
 
-    pub inline fn nextIndex(path: Path, index: u32) ?u32 {
-        if (index < path.len() - 1) return index + 1;
-        if (path.isLooped()) return 0;
-        return null;
+    pub fn nextIndex(path: Path, index: u32) u32 {
+        return (index + 1) % path.len();
     }
 
-    pub inline fn prevIndex(path: Path, index: u32) ?u32 {
-        if (index > 0) return index - 1;
-        if (path.isLooped()) return path.len() - 1;
-        return null;
+    pub fn prevIndex(path: Path, index: u32) u32 {
+        return (index + path.len() - 1) % path.len();
     }
 
-    pub inline fn pos(path: Path, index: u32) Vec2 {
-        return path.positions[index];
-    }
-
-    pub inline fn angleFrom(path: Path, index: u32) ?f32 {
-        return if (index < path.angles.len) path.angles[index] else null;
-    }
-
-    pub inline fn angleTo(path: Path, index: u32) ?f32 {
-        return if (path.prevIndex(index)) |prev_index| path.angles[prev_index] else null;
-    }
-
-    pub inline fn arcFrom(path: Path, index: u32) ?Arc {
-        return if (path.nextIndex(index)) |next_index| .{
-            .pos_a = path.pos(index),
-            .pos_b = path.pos(next_index),
-            .angle = path.angleFrom(index).?,
-        } else null;
-    }
-
-    pub inline fn arcTo(path: Path, index: u32) ?Arc {
-        return if (path.prevIndex(index)) |prev_index| .{
-            .pos_a = path.pos(prev_index),
-            .pos_b = path.pos(index),
-            .angle = path.angleTo(index).?,
-        } else null;
+    pub fn getArc(path: Path, index: u32) Arc {
+        return .{
+            .pos_a = path.positions[index],
+            .pos_b = path.positions[path.nextIndex(index)],
+            .angle = path.angles[index],
+        };
     }
 
     pub fn containsPoint(path: Path, point_pos: Vec2) bool {
@@ -144,7 +119,7 @@ pub const Path = struct {
         var inside = false;
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
-            const arc = path.arcFrom(index).?;
+            const arc = path.getArc(index);
             if ((point_pos[1] < arc.pos_a[1]) != (point_pos[1] < arc.pos_b[1]) and
                 linesIntersection(point_pos, .{ 1, 0 }, arc.pos_a, arc.pos_b - arc.pos_a) > 0)
                 inside = !inside;
@@ -179,14 +154,13 @@ pub const Stroke = struct {
         miter,
     };
 
-    // Generate cap from two directions (facing out from the cap)
-    pub fn genCap(stroke: Stroke, pos: Vec2, dir_a: Vec2, dir_b: Vec2, color: [4]u8, buffer: *render.Buffer) !void {
+    fn genCapImpl(stroke: Stroke, pos: Vec2, dir_a: Vec2, dir_b: Vec2, color: [4]u8, buffer: *render.Buffer) !void {
         if (vec2.dot(dir_a, dir_b) == 0)
             return; // directions are opposite, no cap is needed
 
         const sdir_a = vec2.normalize(-dir_a) * vec2.splat(stroke.width);
         const sdir_b = vec2.normalize(-dir_b) * vec2.splat(stroke.width);
-        const sdir = vec2.normalize(sdir_a + sdir_b) * vec2.splat(stroke.width);
+        const sdir = if (vec2.dot(dir_a, dir_b) == 1) sdir_a else vec2.normalize(sdir_a + sdir_b) * vec2.splat(stroke.width);
 
         const side = vec2.dot(normal(sdir_a), sdir_b) < 0;
         const normal_a = if (side) -normal(sdir_a) else normal(sdir_a);
@@ -223,6 +197,17 @@ pub const Stroke = struct {
         }
     }
 
+    pub fn genCap(stroke: Stroke, pos: Vec2, dir_a: ?Vec2, dir_b: ?Vec2, color: [4]u8, buffer: *render.Buffer) !void {
+        if (dir_a) |a| {
+            try stroke.genCapImpl(pos, a, if (dir_b) |b| b else a, color, buffer);
+        } else if (dir_b) |b| {
+            try stroke.genCapImpl(pos, b, b, color, buffer);
+        } else {
+            try stroke.genCapImpl(pos, .{ 1, 0 }, .{ 1, 0 }, color, buffer);
+            try stroke.genCapImpl(pos, .{ -1, 0 }, .{ -1, 0 }, color, buffer);
+        }
+    }
+
     pub fn genArc(stroke: Stroke, arc: Arc, color: [4]u8, buffer: *render.Buffer) !void {
         const normal_a = vec2.normalize(normal(arc.dirA())) * vec2.splat(stroke.width);
         const normal_b = vec2.normalize(normal(arc.dirB())) * vec2.splat(stroke.width);
@@ -232,22 +217,18 @@ pub const Stroke = struct {
         }, color);
     }
 
+    pub fn genSegment(stroke: Stroke, dir: ?Vec2, arc: Arc, color: [4]u8, buffer: *render.Buffer) !Vec2 {
+        try stroke.genCap(arc.pos_a, dir, arc.dirA(), color, buffer);
+        try stroke.genArc(arc, color, buffer);
+        return arc.dirB();
+    }
+
     pub fn genPath(stroke: Stroke, path: Path, color: [4]u8, buffer: *render.Buffer) !void {
+        var dir: ?Vec2 = if (path.isLooped()) path.getArc(path.prevIndex(0)).dirB() else null;
         var index: u32 = 0;
-        while (index < path.len()) : (index += 1) {
-            if (path.arcFrom(index)) |arc_from| {
-                try stroke.genArc(arc_from, color, buffer);
-                if (path.arcTo(index)) |arc_to| {
-                    try stroke.genCap(path.pos(index), arc_from.dirA(), arc_to.dirB(), color, buffer);
-                } else {
-                    try stroke.genCap(path.pos(index), arc_from.dirA(), arc_from.dirA(), color, buffer);
-                }
-            } else if (path.arcTo(index)) |arc_to| {
-                try stroke.genCap(path.pos(index), arc_to.dirB(), arc_to.dirB(), color, buffer);
-            } else {
-                try stroke.genCap(path.pos(index), .{ 1, 0 }, .{ 1, 0 }, color, buffer);
-                try stroke.genCap(path.pos(index), .{ -1, 0 }, .{ -1, 0 }, color, buffer);
-            }
-        }
+        while (index < path.angles.len) : (index += 1)
+            dir = try stroke.genSegment(dir, path.getArc(index), color, buffer);
+        if (!path.isLooped())
+            try stroke.genCap(path.positions[index], dir, null, color, buffer);
     }
 };

@@ -9,23 +9,30 @@ pub const Object = struct {
     allocator: std.mem.Allocator,
     positions: std.ArrayListUnmanaged(geometry.Vec2) = .{},
     angles: std.ArrayListUnmanaged(f32) = .{},
-    color: [4]u8 = .{ 32, 32, 32, 255 },
+    color: [4]u8 = .{ 64, 64, 64, 255 },
     stroke: geometry.Stroke = .{ .width = 0.005, .cap = .round },
     stroke_color: [4]u8 = .{ 255, 255, 255, 255 },
 
-    pub inline fn toPath(object: Object) geometry.Path {
-        return .{ .positions = object.positions.items, .angles = object.angles.items };
-    }
-
-    pub fn init(allocator: std.mem.Allocator, first_pos: geometry.Vec2) !Object {
-        var path = Object{ .allocator = allocator };
-        try path.positions.append(allocator, first_pos);
-        return path;
+    pub fn init(allocator: std.mem.Allocator, pos: geometry.Vec2) !Object {
+        var object = Object{ .allocator = allocator };
+        try object.positions.append(allocator, pos);
+        return object;
     }
 
     pub fn deinit(object: *Object) void {
         object.positions.deinit(object.allocator);
         object.angles.deinit(object.allocator);
+    }
+
+    pub inline fn toPath(object: Object) geometry.Path {
+        return .{ .positions = object.positions.items, .angles = object.angles.items };
+    }
+
+    pub fn fromPath(allocator: std.mem.Allocator, path: geometry.Path) !Object {
+        var object = Object{ .allocator = allocator };
+        try object.positions.appendSlice(allocator, path.positions);
+        try object.angles.appendSlice(allocator, path.angles);
+        return object;
     }
 
     pub fn gen(object: Object, buffer: *render.Buffer) !void {
@@ -35,19 +42,31 @@ pub const Object = struct {
         try object.stroke.genPath(path, object.stroke_color, buffer);
     }
 
-    pub fn append(object: *Object, pos: geometry.Vec2, angle: f32) !void {
+    /// Append segment after the last node
+    pub fn append(object: *Object, angle: f32, pos: geometry.Vec2) !void {
         std.debug.assert(!object.toPath().isLooped());
-        try object.positions.append(object.allocator, pos);
         try object.angles.append(object.allocator, angle);
+        try object.positions.append(object.allocator, pos);
     }
 
+    /// Append path after the last node
+    pub fn appendPath(object: *Object, angle: f32, path: geometry.Path) !void {
+        std.debug.assert(!object.toPath().isLooped());
+        std.debug.assert(!path.isLooped());
+        try object.angles.append(object.allocator, angle);
+        try object.positions.appendSlice(object.allocator, path.positions);
+        try object.angles.appendSlice(object.allocator, path.angles);
+    }
+
+    /// Add segment from last to first node
     pub fn loop(object: *Object, angle: f32) !void {
         std.debug.assert(!object.toPath().isLooped());
         try object.angles.append(object.allocator, angle);
     }
 
-    pub fn split(object: *Object, index: u32, param: f32) !void {
-        const arc = object.toPath().arcFrom(index).?;
+    /// Split segment to two
+    pub fn splitSegment(object: *Object, index: u32, param: f32) !void {
+        const arc = object.toPath().getArc(index);
         try object.positions.insert(object.allocator, index + 1, arc.point(param));
         object.angles.items[index] = arc.angle * param;
         try object.angles.insert(object.allocator, index + 1, arc.angle * (1 - param));
@@ -62,17 +81,12 @@ pub const Object = struct {
             angle.* = -angle.*;
     }
 
-    pub fn rotate(object: *Object, amount: usize) void {
-        std.debug.assert(object.toPath().isLooped());
-        std.mem.rotate(geometry.Vec2, object.positions.items, amount);
-        std.mem.rotate(f32, object.angles.items, amount);
-    }
-
     pub fn clone(object: *Object) !Object {
-        var path_clone = object.*;
-        path_clone.positions = try object.positions.clone(object.allocator);
-        path_clone.angles = try object.angles.clone(object.allocator);
-        return path_clone;
+        return .{
+            .allocator = object.allocator,
+            .positions = try object.positions.clone(object.allocator),
+            .angles = try object.angles.clone(object.allocator),
+        };
     }
 };
 pub var objects: std.ArrayList(Object) = undefined;

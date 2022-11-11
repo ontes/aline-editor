@@ -134,6 +134,12 @@ pub const Context = struct {
                 .target_count = 1,
                 .targets = &[1]webgpu.ColorTargetState{.{
                     .format = .bgra8_unorm,
+                    .blend = &.{
+                        .color = .{
+                            .src_factor = .src_alpha,
+                            .dst_factor = .one_minus_src_alpha,
+                        },
+                    },
                 }},
             },
         });
@@ -229,7 +235,7 @@ pub const Buffer = struct {
         var max_pos = path.positions[0];
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
-            const bounding_box = path.arcFrom(index).?.boundingBox();
+            const bounding_box = path.getArc(index).boundingBox();
             min_pos = @min(min_pos, bounding_box[0]);
             max_pos = @max(max_pos, bounding_box[1]);
         }
