@@ -4,7 +4,6 @@ const render = @import("../render.zig");
 const webgpu = @import("../bindings/webgpu.zig");
 const webgpu_utils = @import("webgpu_utils.zig");
 const geometry = @import("../geometry.zig");
-const vec2 = @import("../linalg.zig").vec(2, f32);
 
 const err = error.RendererError;
 
@@ -163,7 +162,7 @@ pub const Context = struct {
         context.swapchain = webgpu_utils.createSwapchain(context.device, context.surface, size);
     }
 
-    pub fn update(context: Context, buffers: []const Buffer) void {
+    pub fn draw(context: Context, buffers: []const Buffer) void {
         const command_encoder = context.device.createCommandEncoder(&.{});
         const pass = command_encoder.beginRenderPass(&.{
             .color_attachment_count = 1,
@@ -229,13 +228,13 @@ pub const Buffer = struct {
 
     pub fn append(buffer: *Buffer, path: geometry.Path, color: [4]u8) !void {
         std.debug.assert(path.isLooped());
-        if (path.len() == 0) return;
+        if (path.len() < 2) return;
 
         var min_pos = path.positions[0];
         var max_pos = path.positions[0];
-        var index: u32 = 0;
-        while (index < path.len()) : (index += 1) {
-            const bounding_box = path.getArc(index).boundingBox();
+        var i: u32 = 0;
+        while (i < path.len()) : (i += 1) {
+            const bounding_box = path.getArc(i).boundingBox();
             min_pos = @min(min_pos, bounding_box[0]);
             max_pos = @max(max_pos, bounding_box[1]);
         }

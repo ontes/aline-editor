@@ -82,7 +82,7 @@ pub const Window = struct {
     }
 };
 
-pub fn update(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
+pub fn pollEvents(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
     var message: win32.Message = undefined;
     while (win32.peekMessage(&message, null, 0, 0, .remove) == .true) {
         _ = win32.translateMessage(&message);

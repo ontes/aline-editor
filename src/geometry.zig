@@ -5,11 +5,11 @@ const mat2 = @import("linalg.zig").mat(2, f32);
 
 pub const Vec2 = vec2.Vector;
 
-pub inline fn normal(vec: Vec2) Vec2 {
+pub fn normal(vec: Vec2) Vec2 {
     return .{ -vec[1], vec[0] };
 }
 
-pub inline fn rotate(vec: Vec2, angle: f32) Vec2 {
+pub fn rotate(vec: Vec2, angle: f32) Vec2 {
     return mat2.multVec(mat2.rotate(0, 1, angle), vec);
 }
 
@@ -17,7 +17,7 @@ pub fn angleBetween(dir_a: Vec2, dir_b: Vec2) f32 {
     return std.math.atan2(f32, dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0], dir_a[0] * dir_b[0] + dir_a[1] * dir_b[1]);
 }
 
-pub inline fn oppositeAngle(angle: f32) f32 {
+pub fn oppositeAngle(angle: f32) f32 {
     return if (angle > 0) std.math.pi - angle else -std.math.pi - angle;
 }
 
@@ -76,7 +76,11 @@ pub const Arc = struct {
         return rotate(arc.pos_a - arc.pos_b, -arc.angle);
     }
 
-    /// Get angle of arc that contains given point, angle of given arc is ignored
+    pub fn height(arc: Arc) f32 {
+        return vec2.abs(arc.pos_a - arc.pos_b) * @tan(arc.angle / 2) / 2;
+    }
+
+    /// Get angle of arc that contains given point (angle of given arc is ignored)
     pub fn angleOnPoint(arc: Arc, point_pos: Vec2) f32 {
         return oppositeAngle(angleBetween(arc.pos_a - point_pos, arc.pos_b - point_pos));
     }
@@ -86,30 +90,23 @@ pub const Path = struct {
     positions: []const Vec2,
     angles: []const f32,
 
-    pub fn gen(path: Path, color: [4]u8, buffer: *render.Buffer) !void {
-        try buffer.append(path, color);
-    }
-
-    pub inline fn isLooped(path: Path) bool {
-        return path.positions.len == path.angles.len;
-    }
-
     pub inline fn len(path: Path) u32 {
         return @intCast(u32, path.positions.len);
     }
-
-    pub fn nextIndex(path: Path, index: u32) u32 {
+    pub fn isLooped(path: Path) bool {
+        return path.positions.len == path.angles.len;
+    }
+    pub fn next(path: Path, index: u32) u32 {
         return (index + 1) % path.len();
     }
-
-    pub fn prevIndex(path: Path, index: u32) u32 {
+    pub fn prev(path: Path, index: u32) u32 {
         return (index + path.len() - 1) % path.len();
     }
 
     pub fn getArc(path: Path, index: u32) Arc {
         return .{
             .pos_a = path.positions[index],
-            .pos_b = path.positions[path.nextIndex(index)],
+            .pos_b = path.positions[path.next(index)],
             .angle = path.angles[index],
         };
     }
@@ -135,7 +132,7 @@ pub const Circle = struct {
     pos: Vec2,
     radius: f32,
 
-    pub fn gen(circle: Circle, color: [4]u8, buffer: *render.Buffer) !void {
+    pub fn draw(circle: Circle, color: render.Color, buffer: *render.Buffer) !void {
         try buffer.append(.{
             .positions = &.{ circle.pos + Vec2{ -circle.radius, 0 }, circle.pos + Vec2{ circle.radius, 0 } },
             .angles = &.{ std.math.pi / 2.0, std.math.pi / 2.0 },
@@ -154,7 +151,7 @@ pub const Stroke = struct {
         miter,
     };
 
-    fn genCapImpl(stroke: Stroke, pos: Vec2, dir_a: Vec2, dir_b: Vec2, color: [4]u8, buffer: *render.Buffer) !void {
+    fn drawCap(stroke: Stroke, pos: Vec2, dir_a: Vec2, dir_b: Vec2, color: render.Color, buffer: *render.Buffer) !void {
         if (vec2.dot(dir_a, dir_b) == 0)
             return; // directions are opposite, no cap is needed
 
@@ -197,38 +194,76 @@ pub const Stroke = struct {
         }
     }
 
-    pub fn genCap(stroke: Stroke, pos: Vec2, dir_a: ?Vec2, dir_b: ?Vec2, color: [4]u8, buffer: *render.Buffer) !void {
-        if (dir_a) |a| {
-            try stroke.genCapImpl(pos, a, if (dir_b) |b| b else a, color, buffer);
-        } else if (dir_b) |b| {
-            try stroke.genCapImpl(pos, b, b, color, buffer);
-        } else {
-            try stroke.genCapImpl(pos, .{ 1, 0 }, .{ 1, 0 }, color, buffer);
-            try stroke.genCapImpl(pos, .{ -1, 0 }, .{ -1, 0 }, color, buffer);
-        }
-    }
-
-    pub fn genArc(stroke: Stroke, arc: Arc, color: [4]u8, buffer: *render.Buffer) !void {
+    fn drawSegment(stroke: Stroke, arc: Arc, color: render.Color, buffer: *render.Buffer) !void {
         const normal_a = vec2.normalize(normal(arc.dirA())) * vec2.splat(stroke.width);
         const normal_b = vec2.normalize(normal(arc.dirB())) * vec2.splat(stroke.width);
+
         try buffer.append(.{
             .positions = &.{ arc.pos_a + normal_a, arc.pos_b - normal_b, arc.pos_b + normal_b, arc.pos_a - normal_a },
             .angles = &.{ arc.angle, 0, -arc.angle, 0 },
         }, color);
     }
 
-    pub fn genSegment(stroke: Stroke, dir: ?Vec2, arc: Arc, color: [4]u8, buffer: *render.Buffer) !Vec2 {
-        try stroke.genCap(arc.pos_a, dir, arc.dirA(), color, buffer);
-        try stroke.genArc(arc, color, buffer);
-        return arc.dirB();
+    pub const Generator = struct {
+        stroke: Stroke,
+        color: render.Color,
+        buffer: *render.Buffer,
+        last_pos: Vec2,
+        last_dir: Vec2 = .{ -1, 0 },
+        first_pos: Vec2,
+        first_dir: Vec2 = .{ 1, 0 },
+        is_first: bool = true,
+
+        pub fn add(g: *Generator, angle: f32, pos: Vec2) !void {
+            const arc = Arc{ .pos_a = g.last_pos, .pos_b = pos, .angle = angle };
+            if (g.is_first) {
+                g.first_dir = arc.dirA();
+                g.is_first = false;
+            } else {
+                try g.stroke.drawCap(g.last_pos, g.last_dir, arc.dirA(), g.color, g.buffer);
+            }
+            try g.stroke.drawSegment(arc, g.color, g.buffer);
+            g.last_pos = pos;
+            g.last_dir = arc.dirB();
+        }
+        pub fn finish(g: *Generator) !void {
+            try g.stroke.drawCap(g.first_pos, g.first_dir, g.first_dir, g.color, g.buffer);
+            try g.stroke.drawCap(g.last_pos, g.last_dir, g.last_dir, g.color, g.buffer);
+            g.* = undefined;
+        }
+        pub fn finishLoop(g: *Generator, angle: f32) !void {
+            const arc = Arc{ .pos_a = g.last_pos, .pos_b = g.first_pos, .angle = angle };
+            try g.stroke.drawCap(g.last_pos, g.last_dir, arc.dirA(), g.color, g.buffer);
+            try g.stroke.drawSegment(arc, g.color, g.buffer);
+            try g.stroke.drawCap(g.first_pos, arc.dirB(), g.first_dir, g.color, g.buffer);
+            g.* = undefined;
+        }
+    };
+    pub inline fn begin(stroke: Stroke, pos: Vec2, color: render.Color, buffer: *render.Buffer) Generator {
+        return .{ .stroke = stroke, .color = color, .buffer = buffer, .first_pos = pos, .last_pos = pos };
     }
 
-    pub fn genPath(stroke: Stroke, path: Path, color: [4]u8, buffer: *render.Buffer) !void {
-        var dir: ?Vec2 = if (path.isLooped()) path.getArc(path.prevIndex(0)).dirB() else null;
-        var index: u32 = 0;
-        while (index < path.angles.len) : (index += 1)
-            dir = try stroke.genSegment(dir, path.getArc(index), color, buffer);
-        if (!path.isLooped())
-            try stroke.genCap(path.positions[index], dir, null, color, buffer);
+    pub fn drawPoint(stroke: Stroke, pos: Vec2, color: render.Color, buffer: *render.Buffer) !void {
+        var generator = stroke.begin(pos, color, buffer);
+        try generator.finish();
+    }
+
+    pub fn drawArc(stroke: Stroke, arc: Arc, color: render.Color, buffer: *render.Buffer) !void {
+        var generator = stroke.begin(arc.pos_a, color, buffer);
+        try generator.add(arc.angle, arc.pos_b);
+        try generator.finish();
+    }
+
+    pub fn drawPath(stroke: Stroke, path: Path, color: render.Color, buffer: *render.Buffer) !void {
+        var generator = stroke.begin(path.positions[0], color, buffer);
+        var i: usize = 0;
+        while (i + 1 < path.len()) : (i += 1) {
+            try generator.add(path.angles[i], path.positions[i + 1]);
+        }
+        if (path.isLooped()) {
+            try generator.finishLoop(path.angles[i]);
+        } else {
+            try generator.finish();
+        }
     }
 };

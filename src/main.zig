@@ -1,131 +1,71 @@
 const std = @import("std");
 const platform = @import("platform.zig");
 const render = @import("render.zig");
-const canvas = @import("canvas.zig");
-const history = @import("history.zig");
-const tools = @import("tools.zig");
+const editor = @import("editor.zig");
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const desired_frame_time = 10 * std.time.ns_per_ms;
+
 var window: platform.Window = undefined;
+
 var context: render.Context = undefined;
+var main_buffer: render.Buffer = undefined;
+var helper_buffer: render.Buffer = undefined;
 
 var should_run = true;
+var time: i128 = undefined;
 
-var ctrl_pressed = false;
-
-const timer = struct {
-    var prev_time: u128 = 0;
-    var time: u128 = 0;
-    var frames_per_second: u32 = 0;
-    var frame_counter: u32 = 0;
-
-    fn update() void {
-        prev_time = time;
-        time = @intCast(u128, std.time.nanoTimestamp());
-
-        frame_counter += 1;
-        if (oncePerMs(1000)) {
-            frames_per_second = frame_counter;
-            frame_counter = 0;
-        }
-    }
-
-    inline fn deltaNs() u128 {
-        return time - prev_time;
-    }
-    inline fn deltaMs() u64 {
-        return deltaNs() / std.time.ns_per_ms;
-    }
-    inline fn deltaSeconds() f32 {
-        return @intToFloat(f32, deltaMs()) / 1000;
-    }
-    inline fn oncePerNs(interval: u128) bool {
-        return (time / interval) != (prev_time / interval);
-    }
-    inline fn oncePerMs(interval: u64) bool {
-        return oncePerNs(interval * std.time.ns_per_ms);
-    }
-};
-
-fn init() !void {
-    timer.update();
+fn init(allocator: std.mem.Allocator) !void {
     try platform.init();
     window = try platform.Window.create(.{ 0, 0 }, .{ 1000, 1000 }, "Aline Editor");
     window.show();
-    context = try render.Context.init(window);
 
-    canvas.init(gpa.allocator(), context);
-    tools.init(gpa.allocator(), context);
-    history.init(gpa.allocator());
+    context = try render.Context.init(window);
+    main_buffer = render.Buffer.init(context, allocator);
+    helper_buffer = render.Buffer.init(context, allocator);
+
+    try editor.init(allocator);
+
+    time = std.time.nanoTimestamp();
 }
 
 fn deinit() void {
-    canvas.deinit();
-    tools.deinit();
-    history.deinit();
-
+    editor.deinit();
+    main_buffer.deinit();
+    helper_buffer.deinit();
     context.deinit();
     window.destroy();
     platform.deinit();
-    _ = gpa.deinit();
 }
 
-fn update() !void {
-    timer.update();
-    if (timer.oncePerMs(1000))
-        std.debug.print("FPS: {}\n", .{timer.frames_per_second});
-    try platform.update(onEvent);
-    context.update(&.{ canvas.objects_buffer, tools.tool_buffer });
+fn onFrame() !void {
+    try platform.pollEvents(onEvent);
+
+    if (try editor.draw(&main_buffer, &helper_buffer))
+        context.draw(&.{ main_buffer, helper_buffer });
+
+    const frame_time = std.time.nanoTimestamp() - time;
+    if (frame_time < desired_frame_time)
+        std.time.sleep(@intCast(u64, desired_frame_time - frame_time));
+    time = std.time.nanoTimestamp();
 }
 
 fn onEvent(event: platform.Event, _: platform.Window) !void {
     switch (event) {
         .window_close => should_run = false,
-        .window_resize => |size| {
-            context.onWindowResize(size);
-            canvas.onWindowResize(size);
-        },
-        .mouse_move => |pos| try tools.onMouseMove(canvas.toCanvasPos(pos)),
-        .key_press => |key| switch (key) {
-            .mouse_left => {
-                try tools.onMousePress();
-            },
-            .z => {
-                if (ctrl_pressed) {
-                    try history.undo();
-                    tools.reset();
-                }
-            },
-            .y => {
-                if (ctrl_pressed) {
-                    try history.redo();
-                    tools.reset();
-                }
-            },
-            .left_shift, .right_shift => tools.onShiftPress(),
-            .left_ctrl, .right_ctrl => ctrl_pressed = true,
-            else => {},
-        },
-        .key_release => |key| switch (key) {
-            .mouse_left => try tools.onMouseRelease(),
-            .mouse_right => _ = try tools.setTool(.select),
-            .a => _ = try tools.setTool(.append),
-            .g => _ = try tools.setTool(.move),
-            .d => _ = try tools.setTool(.change_angle),
-            .s => _ = try tools.setTool(.split_segment),
-            .delete => try tools.delete(),
-            .c => try tools.connect(),
-            .left_shift, .right_shift => tools.onShiftRelease(),
-            .left_ctrl, .right_ctrl => ctrl_pressed = false,
-            else => {},
-        },
+        .window_resize => |size| context.onWindowResize(size),
         else => {},
     }
+    try editor.onEvent(event);
 }
 
 pub fn main() !void {
-    try init();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    try init(gpa.allocator());
     defer deinit();
-    while (should_run)
-        try update();
+
+    while (should_run) {
+        try onFrame();
+    }
 }

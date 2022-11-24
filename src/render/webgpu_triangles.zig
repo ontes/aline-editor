@@ -106,7 +106,7 @@ pub const Context = struct {
         context.swapchain = webgpu_utils.createSwapchain(context.device, context.surface, size);
     }
 
-    pub fn update(context: Context, buffers: []const Buffer) void {
+    pub fn draw(context: Context, buffers: []const Buffer) void {
         const command_encoder = context.device.createCommandEncoder(&.{});
         const pass = command_encoder.beginRenderPass(&.{
             .color_attachment_count = 1,
