@@ -22,9 +22,10 @@ pub inline fn init(allocator: std.mem.Allocator) Drawing {
     return .{ .allocator = allocator };
 }
 
-pub fn deinit(drawing: *Drawing) void {
-    drawing.entries.deinit(drawing.allocator);
-    drawing.data.deinit(drawing.allocator);
+pub fn deinit(drawing: Drawing) void {
+    var drawing_ = drawing;
+    drawing_.entries.deinit(drawing.allocator);
+    drawing_.data.deinit(drawing.allocator);
 }
 
 pub fn getLen(drawing: Drawing, index: u32) u32 {

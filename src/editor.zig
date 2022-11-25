@@ -4,6 +4,7 @@ const geometry = @import("geometry.zig");
 const platform = @import("platform.zig");
 const vec2 = @import("linalg.zig").vec(2, f32);
 
+const Selection = @import("editor/Selection.zig");
 const History = @import("editor/History.zig");
 const operations = @import("editor/operations.zig");
 const snapping = @import("editor/snapping.zig");
@@ -22,7 +23,7 @@ var should_redraw_helper = true;
 
 pub fn init(allocator: std.mem.Allocator) !void {
     history = History.init(allocator);
-    try history.add(History.Entry.init(allocator));
+    try history.add(Selection.init(allocator));
 }
 
 pub fn deinit() void {
@@ -57,30 +58,28 @@ fn setOperation(operation: operations.AnyOperation) !void {
 var mouse_click_pos: ?geometry.Vec2 = null;
 
 fn selectPoint(pos: geometry.Vec2) !void {
-    const selection = &history.get().selection;
-    const drawing = history.get().drawing;
-    if (snapping.select(drawing, pos)) |s| {
+    const sel = history.get();
+    if (snapping.select(sel.drawing, pos)) |s| {
         if (input.isCtrlPressed()) {
-            try selection.togglePath(s.index, drawing);
+            try sel.togglePath(s.index);
         } else switch (s.val) {
-            .node => |node| try selection.toggleNode(s.index, node, drawing),
-            .segment => |segment| try selection.toggleSegment(s.index, segment, drawing),
-            .loop => try selection.togglePath(s.index, drawing),
+            .node => |node| try sel.toggleNode(s.index, node),
+            .segment => |segment| try sel.toggleSegment(s.index, segment),
+            .loop => try sel.togglePath(s.index),
         }
     }
 }
 
 fn selectRect(min_pos: geometry.Vec2, max_pos: geometry.Vec2) !void {
-    const selection = &history.get().selection;
-    const drawing = history.get().drawing;
-    var it = drawing.pathIterator();
+    const sel = history.get();
+    var it = sel.drawing.pathIterator();
     while (it.next()) |path| {
         var i: u32 = 0;
         while (i < path.len()) : (i += 1) {
             if (@reduce(.And, path.positions[i] >= min_pos) and
                 @reduce(.And, path.positions[i] <= max_pos) and
-                !selection.isSelectedNode(it.getIndex(), i))
-                try selection.selectNode(it.getIndex(), i);
+                !sel.isSelectedNode(it.getIndex(), i))
+                try sel.selectNode(it.getIndex(), i);
         }
         i = 0;
         while (i < path.angles.len) : (i += 1) {
@@ -88,8 +87,8 @@ fn selectRect(min_pos: geometry.Vec2, max_pos: geometry.Vec2) !void {
             const arc_bounds = arc.boundingBox();
             if (@reduce(.And, arc_bounds[0] >= min_pos) and
                 @reduce(.And, arc_bounds[1] <= max_pos) and
-                !selection.isSelectedSegment(it.getIndex(), i))
-                try selection.selectSegment(it.getIndex(), i, drawing);
+                !sel.isSelectedSegment(it.getIndex(), i))
+                try sel.selectSegment(it.getIndex(), i);
         }
     }
 }
@@ -111,7 +110,7 @@ pub fn onEvent(event: platform.Event) !void {
             switch (key) {
                 .mouse_left => if (!isGrabbed() and mouse_click_pos != null) {
                     if (!input.isShiftPressed())
-                        history.get().selection.clear();
+                        history.get().deselectAll();
                     const mouse_pos = input.mouseCanvasPos();
                     if (snapping.distToPoint(mouse_pos, mouse_click_pos.?) < snapping.snap_dist) {
                         try selectPoint(mouse_pos);
@@ -138,7 +137,7 @@ pub fn onEvent(event: platform.Event) !void {
                 },
                 .a => if (input.isCtrlPressed()) {
                     if (!isGrabbed()) {
-                        try history.get().selection.selectAll(history.get().drawing);
+                        try history.get().selectAll();
                         pending_operation = null;
                         should_redraw_helper = true;
                     }
@@ -180,7 +179,7 @@ pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
         if (pending_operation != null and pending_operation.?.isGrabbed()) {
             try pending_operation.?.drawHelper(history.getPrev().*, helper_buffer);
         } else {
-            try history.get().selection.draw(history.get().drawing, wide_stroke, select_color, helper_buffer);
+            try history.get().drawSelected(wide_stroke, select_color, helper_buffer);
         }
         helper_buffer.flush();
         should_redraw_helper = false;

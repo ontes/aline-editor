@@ -4,7 +4,6 @@ const geometry = @import("../geometry.zig");
 const platform = @import("../platform.zig");
 const editor = @import("../editor.zig");
 
-const Entry = @import("History.zig").Entry;
 const Drawing = @import("Drawing.zig");
 const Selection = @import("Selection.zig");
 const properties = @import("properties.zig");
@@ -40,15 +39,15 @@ pub const AnyOperation = union(enum) {
         };
     }
 
-    pub fn apply(op: AnyOperation, entry: Entry) !Entry {
+    pub fn apply(op: AnyOperation, sel: Selection) !Selection {
         return switch (op) {
-            inline else => |comptime_op| comptime_op.apply(entry),
+            inline else => |comptime_op| comptime_op.apply(sel),
         };
     }
 
-    pub fn drawHelper(op: AnyOperation, entry: Entry, buffer: *render.Buffer) !void {
+    pub fn drawHelper(op: AnyOperation, sel: Selection, buffer: *render.Buffer) !void {
         return switch (op) {
-            inline else => |comptime_op| comptime_op.drawHelper(entry, buffer),
+            inline else => |comptime_op| comptime_op.drawHelper(sel, buffer),
         };
     }
 };
@@ -57,8 +56,8 @@ pub const AddPoint = struct {
     position: properties.Position,
     style: Drawing.Style = default_style,
 
-    pub fn init(entry: Entry) ?AddPoint {
-        if (!entry.selection.isEmpty()) return null;
+    pub fn init(sel: Selection) ?AddPoint {
+        if (!sel.isNothingSelected()) return null;
 
         var position_prop = properties.Position{ .val = .{ 0, 0 } };
         position_prop.beginGrab();
@@ -73,14 +72,14 @@ pub const AddPoint = struct {
         try op.position.onEvent(event);
     }
 
-    pub fn apply(op: AddPoint, entry: Entry) !Entry {
-        var out = try entry.cloneDrawingOnly();
+    pub fn apply(op: AddPoint, sel: Selection) !Selection {
+        var out = try sel.cloneWithNothingSelected();
         try out.drawing.addPoint(op.position.val, op.style);
-        try out.selection.selectNode(@intCast(u32, entry.drawing.entries.len), 0);
+        try out.selectNode(@intCast(u32, sel.drawing.entries.len), 0);
         return out;
     }
 
-    pub fn drawHelper(op: AddPoint, _: Entry, buffer: *render.Buffer) !void {
+    pub fn drawHelper(op: AddPoint, _: Selection, buffer: *render.Buffer) !void {
         try wide_stroke.drawPoint(op.position.val, helper_color, buffer);
     }
 };
@@ -89,11 +88,11 @@ pub const Append = struct {
     position: properties.Position,
     angle: f32 = 0,
 
-    pub fn init(entry: Entry) ?Append {
-        if (!(entry.selection.loops.items.len == 0 and entry.selection.intervals.len == 1)) return null;
-        const index = entry.selection.intervals.items(.index)[0];
-        const path = entry.drawing.getPath(index);
-        const interval = entry.selection.intervals.items(.interval)[0];
+    pub fn init(sel: Selection) ?Append {
+        if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
+        const index = sel.intervals.items(.index)[0];
+        const path = sel.drawing.getPath(index);
+        const interval = sel.intervals.items(.interval)[0];
         if (!interval.isLooseEnd(path)) return null;
 
         var position_prop = properties.Position{ .val = path.positions[interval.a] };
@@ -109,11 +108,11 @@ pub const Append = struct {
         try op.position.onEvent(event);
     }
 
-    pub fn apply(op: Append, entry: Entry) !Entry {
-        const index = entry.selection.intervals.items(.index)[0];
-        const interval = entry.selection.intervals.items(.interval)[0];
+    pub fn apply(op: Append, sel: Selection) !Selection {
+        const index = sel.intervals.items(.index)[0];
+        const interval = sel.intervals.items(.interval)[0];
 
-        var out = try entry.cloneDrawingOnly();
+        var out = try sel.cloneWithNothingSelected();
         if (interval.a == 0)
             out.drawing.reversePath(index);
 
@@ -133,17 +132,17 @@ pub const Append = struct {
             }
         } else {
             try out.drawing.appendPoint(index, op.position.val, op.angle);
-            try out.selection.selectNode(index, out.drawing.getLen(index) - 1);
+            try out.selectNode(index, out.drawing.getLen(index) - 1);
         }
         return out;
     }
 
-    pub fn drawHelper(op: Append, entry: Entry, buffer: *render.Buffer) !void {
-        const index = entry.selection.intervals.items(.index)[0];
-        const interval = entry.selection.intervals.items(.interval)[0];
-        const pos_a = entry.drawing.getPath(index).positions[interval.a];
+    pub fn drawHelper(op: Append, sel: Selection, buffer: *render.Buffer) !void {
+        const index = sel.intervals.items(.index)[0];
+        const interval = sel.intervals.items(.interval)[0];
+        const pos_a = sel.drawing.getPath(index).positions[interval.a];
         var pos_b = op.position.val;
-        var it = entry.drawing.pathIterator();
+        var it = sel.drawing.pathIterator();
         while (it.next()) |path| {
             const node = snapping.closestLooseEnd(path, op.position.val);
             if (snapping.distToPoint(path.positions[node], op.position.val) < snapping.snap_dist) {
@@ -160,10 +159,10 @@ pub const Append = struct {
 pub const Connect = struct {
     angle: f32 = 0,
 
-    pub fn init(entry: Entry) ?Connect {
-        if (!(entry.selection.loops.items.len == 0 and entry.selection.intervals.len == 2)) return null;
-        if (!entry.selection.intervals.items(.interval)[0].isLooseEnd(entry.drawing.getPath(entry.selection.intervals.items(.index)[0]))) return null;
-        if (!entry.selection.intervals.items(.interval)[1].isLooseEnd(entry.drawing.getPath(entry.selection.intervals.items(.index)[1]))) return null;
+    pub fn init(sel: Selection) ?Connect {
+        if (!(sel.loops.items.len == 0 and sel.intervals.len == 2)) return null;
+        if (!sel.intervals.items(.interval)[0].isLooseEnd(sel.drawing.getPath(sel.intervals.items(.index)[0]))) return null;
+        if (!sel.intervals.items(.interval)[1].isLooseEnd(sel.drawing.getPath(sel.intervals.items(.index)[1]))) return null;
         return .{};
     }
 
@@ -178,16 +177,16 @@ pub const Connect = struct {
         // TODO
     }
 
-    pub fn apply(op: Connect, entry: Entry) !Entry {
-        var index0 = entry.selection.intervals.items(.index)[0];
-        var index1 = entry.selection.intervals.items(.index)[1];
-        var interval0 = entry.selection.intervals.items(.interval)[0];
-        var interval1 = entry.selection.intervals.items(.interval)[1];
+    pub fn apply(op: Connect, sel: Selection) !Selection {
+        var index0 = sel.intervals.items(.index)[0];
+        var index1 = sel.intervals.items(.index)[1];
+        var interval0 = sel.intervals.items(.interval)[0];
+        var interval1 = sel.intervals.items(.interval)[1];
 
-        var out = try entry.cloneDrawingOnly();
+        var out = try sel.cloneWithNothingSelected();
         if (index0 == index1) {
             out.drawing.loopPath(index0, op.angle);
-            try out.selection.selectSegment(index0, out.drawing.getLen(index0) - 1, out.drawing);
+            try out.selectSegment(index0, out.drawing.getLen(index0) - 1);
         } else {
             if (index0 > index1) {
                 std.mem.swap(u32, &index0, &index1);
@@ -200,14 +199,14 @@ pub const Connect = struct {
 
             const join_index = out.drawing.getLen(index0) - 1;
             out.drawing.joinPaths(index0, index1, op.angle);
-            try out.selection.selectSegment(index0, join_index, out.drawing);
+            try out.selectSegment(index0, join_index);
         }
         return out;
     }
 
-    pub fn drawHelper(op: Connect, entry: Entry, buffer: *render.Buffer) !void {
+    pub fn drawHelper(op: Connect, sel: Selection, buffer: *render.Buffer) !void {
         _ = op;
-        _ = entry;
+        _ = sel;
         _ = buffer;
         // TODO
     }
@@ -216,8 +215,8 @@ pub const Connect = struct {
 pub const Move = struct {
     offset: properties.Offset,
 
-    pub fn init(entry: Entry) ?Move {
-        if (entry.selection.isEmpty()) return null;
+    pub fn init(sel: Selection) ?Move {
+        if (sel.isNothingSelected()) return null;
 
         var offset_prop = properties.Offset{};
         offset_prop.beginGrab();
@@ -236,22 +235,22 @@ pub const Move = struct {
         return pos + offset;
     }
 
-    pub fn apply(op: Move, entry: Entry) !Entry {
+    pub fn apply(op: Move, sel: Selection) !Selection {
         std.debug.print("Move.\n", .{});
-        var out = try entry.clone();
-        entry.selection.apply(&out.drawing, op.offset.val, transform);
+        var out = try sel.clone();
+        out.apply(op.offset.val, transform);
         return out;
     }
 
-    pub fn drawHelper(op: Move, entry: Entry, buffer: *render.Buffer) !void {
-        try entry.selection.drawApply(entry.drawing, op.offset.val, transform, wide_stroke, helper_color, buffer);
-        try entry.selection.drawApplyEdges(entry.drawing, op.offset.val, transform, basic_stroke, helper_color, buffer);
+    pub fn drawHelper(op: Move, sel: Selection, buffer: *render.Buffer) !void {
+        try sel.drawApply(op.offset.val, transform, wide_stroke, helper_color, buffer);
+        try sel.drawApplyEdges(op.offset.val, transform, basic_stroke, helper_color, buffer);
     }
 };
 
 pub const Delete = struct {
-    pub fn init(entry: Entry) ?Delete {
-        if (entry.selection.isEmpty()) return null;
+    pub fn init(sel: Selection) ?Delete {
+        if (sel.isNothingSelected()) return null;
         return .{};
     }
 
@@ -264,35 +263,35 @@ pub const Delete = struct {
         // TODO
     }
 
-    pub fn apply(_: Delete, entry: Entry) !Entry {
-        var out = Entry.init(entry.drawing.allocator);
-        var it = entry.drawing.pathIterator();
+    pub fn apply(_: Delete, sel: Selection) !Selection {
+        var out = Selection.init(sel.drawing.allocator);
+        var it = sel.drawing.pathIterator();
         while (it.next()) |path| {
             if (path.isLooped()) {
-                try addUnselectedLoop(&out.drawing, entry, it.getIndex());
+                try addUnselectedLoop(&out.drawing, sel, it.getIndex());
             } else {
-                try addUnselectedInterval(&out.drawing, entry, it.getIndex(), .{ .a = 0, .b = path.len() - 1 });
+                try addUnselectedInterval(&out.drawing, sel, it.getIndex(), .{ .a = 0, .b = path.len() - 1 });
             }
         }
         return out;
     }
 
-    fn addUnselectedLoop(out_drawing: *Drawing, entry: Entry, index: u32) !void {
-        for (entry.selection.loops.items) |sel_index| {
+    fn addUnselectedLoop(out_drawing: *Drawing, sel: Selection, index: u32) !void {
+        for (sel.loops.items) |sel_index| {
             if (sel_index == index)
                 return;
         }
-        for (entry.selection.intervals.items(.index)) |sel_index, i| {
+        for (sel.intervals.items(.index)) |sel_index, i| {
             if (sel_index == index) {
-                const sel_interval = entry.selection.intervals.items(.interval)[i];
+                const sel_interval = sel.intervals.items(.interval)[i];
                 if (!sel_interval.isSingleNode()) {
-                    try addUnselectedInterval(out_drawing, entry, index, .{ .a = sel_interval.b, .b = sel_interval.a });
+                    try addUnselectedInterval(out_drawing, sel, index, .{ .a = sel_interval.b, .b = sel_interval.a });
                     return;
                 }
             }
         }
-        const path = entry.drawing.getPath(index);
-        try out_drawing.addPoint(path.positions[0], entry.drawing.entries.items(.style)[index]);
+        const path = sel.drawing.getPath(index);
+        try out_drawing.addPoint(path.positions[0], sel.drawing.entries.items(.style)[index]);
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i: u32 = 0;
         while (i + 1 < path.len()) : (i += 1)
@@ -300,29 +299,29 @@ pub const Delete = struct {
         out_drawing.loopPath(new_index, path.angles[i]);
     }
 
-    fn addUnselectedInterval(out_drawing: *Drawing, entry: Entry, index: u32, interval: Selection.Interval) !void {
-        for (entry.selection.intervals.items(.index)) |sel_index, i| {
+    fn addUnselectedInterval(out_drawing: *Drawing, sel: Selection, index: u32, interval: Selection.Interval) !void {
+        for (sel.intervals.items(.index)) |sel_index, i| {
             if (sel_index == index) {
-                const sel_interval = entry.selection.intervals.items(.interval)[i];
+                const sel_interval = sel.intervals.items(.interval)[i];
                 if (!sel_interval.isSingleNode() and interval.containsSegment(sel_interval.a)) {
                     if (sel_interval.a != interval.a)
-                        try addUnselectedInterval(out_drawing, entry, index, .{ .a = interval.a, .b = sel_interval.a });
+                        try addUnselectedInterval(out_drawing, sel, index, .{ .a = interval.a, .b = sel_interval.a });
                     if (sel_interval.b != interval.b)
-                        try addUnselectedInterval(out_drawing, entry, index, .{ .a = sel_interval.b, .b = interval.b });
+                        try addUnselectedInterval(out_drawing, sel, index, .{ .a = sel_interval.b, .b = interval.b });
                     return;
                 }
             }
         }
-        const path = entry.drawing.getPath(index);
-        try out_drawing.addPoint(path.positions[interval.a], entry.drawing.entries.items(.style)[index]);
+        const path = sel.drawing.getPath(index);
+        try out_drawing.addPoint(path.positions[interval.a], sel.drawing.entries.items(.style)[index]);
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i = interval.a;
         while (i != interval.b) : (i = path.next(i))
             try out_drawing.appendPoint(new_index, path.positions[path.next(i)], path.angles[i]);
     }
 
-    pub fn drawHelper(_: Delete, entry: Entry, buffer: *render.Buffer) !void {
-        _ = entry;
+    pub fn drawHelper(_: Delete, sel: Selection, buffer: *render.Buffer) !void {
+        _ = sel;
         _ = buffer;
         // TODO
     }
@@ -331,10 +330,10 @@ pub const Delete = struct {
 pub const ChangeAngle = struct {
     angle: properties.Angle,
 
-    pub fn init(entry: Entry) ?ChangeAngle {
-        if (!(entry.selection.loops.items.len == 0 and entry.selection.intervals.len == 1)) return null;
-        const path = entry.drawing.getPath(entry.selection.intervals.items(.index)[0]);
-        const interval = entry.selection.intervals.items(.interval)[0];
+    pub fn init(sel: Selection) ?ChangeAngle {
+        if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
+        const path = sel.drawing.getPath(sel.intervals.items(.index)[0]);
+        const interval = sel.intervals.items(.interval)[0];
         if (!interval.isSingleSegment(path)) return null;
 
         var angle_prop = properties.Angle{ .val = path.angles[interval.a] };
@@ -350,16 +349,16 @@ pub const ChangeAngle = struct {
         try op.angle.onEvent(event);
     }
 
-    pub fn apply(op: ChangeAngle, entry: Entry) !Entry {
-        var out = try entry.clone();
-        const interval = entry.selection.intervals.items(.interval)[0];
-        out.drawing.getAngles(entry.selection.intervals.items(.index)[0])[interval.a] = op.angle.val;
+    pub fn apply(op: ChangeAngle, sel: Selection) !Selection {
+        var out = try sel.clone();
+        const interval = sel.intervals.items(.interval)[0];
+        out.drawing.getAngles(sel.intervals.items(.index)[0])[interval.a] = op.angle.val;
         return out;
     }
 
-    pub fn drawHelper(op: ChangeAngle, entry: Entry, buffer: *render.Buffer) !void {
-        const path = entry.drawing.getPath(entry.selection.intervals.items(.index)[0]);
-        const interval = entry.selection.intervals.items(.interval)[0];
+    pub fn drawHelper(op: ChangeAngle, sel: Selection, buffer: *render.Buffer) !void {
+        const path = sel.drawing.getPath(sel.intervals.items(.index)[0]);
+        const interval = sel.intervals.items(.interval)[0];
         var arc = path.getArc(interval.a);
         arc.angle = op.angle.val;
         try basic_stroke.drawArc(arc, helper_color, buffer);
