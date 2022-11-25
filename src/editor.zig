@@ -54,18 +54,42 @@ fn setOperation(operation: operations.AnyOperation) !void {
     try updateOperation();
 }
 
-fn select() !void {
+var mouse_click_pos: ?geometry.Vec2 = null;
+
+fn selectPoint(pos: geometry.Vec2) !void {
     const selection = &history.get().selection;
-    if (!input.isShiftPressed())
-        selection.clear();
-    if (snapping.select(history.get().drawing, input.mouseCanvasPos())) |s| {
-        const path = history.get().drawing.getPath(s.index);
+    const drawing = history.get().drawing;
+    if (snapping.select(drawing, pos)) |s| {
         if (input.isCtrlPressed()) {
-            try selection.toggleWhole(s.index, path);
+            try selection.togglePath(s.index, drawing);
         } else switch (s.val) {
-            .node => |node| try selection.toggleNode(s.index, node, path),
-            .segment => |segment| try selection.toggleSegment(s.index, segment, path),
-            .loop => try selection.toggleWhole(s.index, path),
+            .node => |node| try selection.toggleNode(s.index, node, drawing),
+            .segment => |segment| try selection.toggleSegment(s.index, segment, drawing),
+            .loop => try selection.togglePath(s.index, drawing),
+        }
+    }
+}
+
+fn selectRect(min_pos: geometry.Vec2, max_pos: geometry.Vec2) !void {
+    const selection = &history.get().selection;
+    const drawing = history.get().drawing;
+    var it = drawing.pathIterator();
+    while (it.next()) |path| {
+        var i: u32 = 0;
+        while (i < path.len()) : (i += 1) {
+            if (@reduce(.And, path.positions[i] >= min_pos) and
+                @reduce(.And, path.positions[i] <= max_pos) and
+                !selection.isSelectedNode(it.getIndex(), i))
+                try selection.selectNode(it.getIndex(), i);
+        }
+        i = 0;
+        while (i < path.angles.len) : (i += 1) {
+            const arc = path.getArc(i);
+            const arc_bounds = arc.boundingBox();
+            if (@reduce(.And, arc_bounds[0] >= min_pos) and
+                @reduce(.And, arc_bounds[1] <= max_pos) and
+                !selection.isSelectedSegment(it.getIndex(), i))
+                try selection.selectSegment(it.getIndex(), i, drawing);
         }
     }
 }
@@ -75,12 +99,26 @@ pub fn onEvent(event: platform.Event) !void {
     if (pending_operation) |*operation|
         try operation.onEvent(event);
     switch (event) {
-        .key_press => |key| {
+        .key_press => |key| switch (key) {
+            .mouse_left => if (!isGrabbed()) {
+                mouse_click_pos = input.mouseCanvasPos();
+            },
+            else => {},
+        },
+        .key_release => |key| {
             if (!live_preview and isGrabbed())
                 try applyOperation();
             switch (key) {
-                .mouse_left => if (!isGrabbed()) {
-                    try select();
+                .mouse_left => if (!isGrabbed() and mouse_click_pos != null) {
+                    if (!input.isShiftPressed())
+                        history.get().selection.clear();
+                    const mouse_pos = input.mouseCanvasPos();
+                    if (snapping.distToPoint(mouse_pos, mouse_click_pos.?) < snapping.snap_dist) {
+                        try selectPoint(mouse_pos);
+                    } else {
+                        try selectRect(@min(mouse_pos, mouse_click_pos.?), @max(mouse_pos, mouse_click_pos.?));
+                    }
+                    mouse_click_pos = null;
                     pending_operation = null;
                     should_redraw_helper = true;
                 },

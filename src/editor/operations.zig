@@ -28,18 +28,6 @@ pub const AnyOperation = union(enum) {
     Delete: Delete,
     ChangeAngle: ChangeAngle,
 
-    pub fn init(comptime Operation: type, entry: Entry) ?AnyOperation {
-        const op = Operation.init(entry) orelse return null;
-        return switch (Operation) {
-            .AddPoint => .{ .AddPoint = op },
-            .Append => .{ .Append = op },
-            .Connect => .{ .Connect = op },
-            .Move => .{ .Move = op },
-            .Delete => .{ .Delete = op },
-            .ChangeAngle => .{ .ChangeAngle = op },
-        };
-    }
-
     pub fn isGrabbed(op: AnyOperation) bool {
         return switch (op) {
             inline else => |comptime_op| comptime_op.isGrabbed(),
@@ -88,7 +76,7 @@ pub const AddPoint = struct {
     pub fn apply(op: AddPoint, entry: Entry) !Entry {
         var out = try entry.cloneDrawingOnly();
         try out.drawing.addPoint(op.position.val, op.style);
-        try out.selection.addInterval(@intCast(u32, entry.drawing.entries.len), .{ .a = 0, .b = 0 });
+        try out.selection.selectNode(@intCast(u32, entry.drawing.entries.len), 0);
         return out;
     }
 
@@ -145,8 +133,7 @@ pub const Append = struct {
             }
         } else {
             try out.drawing.appendPoint(index, op.position.val, op.angle);
-            const last = out.drawing.getLen(index) - 1;
-            try out.selection.addInterval(index, .{ .a = last, .b = last });
+            try out.selection.selectNode(index, out.drawing.getLen(index) - 1);
         }
         return out;
     }
@@ -200,7 +187,7 @@ pub const Connect = struct {
         var out = try entry.cloneDrawingOnly();
         if (index0 == index1) {
             out.drawing.loopPath(index0, op.angle);
-            try out.selection.addInterval(index0, .{ .a = out.drawing.getLen(index0) - 1, .b = 0 });
+            try out.selection.selectSegment(index0, out.drawing.getLen(index0) - 1, out.drawing);
         } else {
             if (index0 > index1) {
                 std.mem.swap(u32, &index0, &index1);
@@ -211,8 +198,9 @@ pub const Connect = struct {
             if (interval1.a != 0)
                 out.drawing.reversePath(index1);
 
-            try out.selection.addInterval(index0, .{ .a = out.drawing.getLen(index0) - 1, .b = out.drawing.getLen(index0) });
+            const join_index = out.drawing.getLen(index0) - 1;
             out.drawing.joinPaths(index0, index1, op.angle);
+            try out.selection.selectSegment(index0, join_index, out.drawing);
         }
         return out;
     }
@@ -249,6 +237,7 @@ pub const Move = struct {
     }
 
     pub fn apply(op: Move, entry: Entry) !Entry {
+        std.debug.print("Move.\n", .{});
         var out = try entry.clone();
         entry.selection.apply(&out.drawing, op.offset.val, transform);
         return out;

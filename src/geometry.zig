@@ -96,11 +96,11 @@ pub const Path = struct {
     pub fn isLooped(path: Path) bool {
         return path.positions.len == path.angles.len;
     }
-    pub fn next(path: Path, index: u32) u32 {
-        return (index + 1) % path.len();
+    pub fn next(path: Path, node: u32) u32 {
+        return (node + 1) % path.len();
     }
-    pub fn prev(path: Path, index: u32) u32 {
-        return (index + path.len() - 1) % path.len();
+    pub fn prev(path: Path, node: u32) u32 {
+        return (node + path.len() - 1) % path.len();
     }
 
     pub fn getArc(path: Path, index: u32) Arc {

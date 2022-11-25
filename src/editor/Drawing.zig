@@ -15,7 +15,7 @@ pub const Style = struct {
 const Drawing = @This();
 
 allocator: std.mem.Allocator,
-entries: std.MultiArrayList(struct { len: u32, is_looped: bool, style: Style }) = .{},
+entries: std.MultiArrayList(struct { len: u32, looped: bool, style: Style }) = .{},
 data: std.MultiArrayList(struct { position: geometry.Vec2, angle: f32 = 0 }) = .{},
 
 pub inline fn init(allocator: std.mem.Allocator) Drawing {
@@ -27,17 +27,31 @@ pub fn deinit(drawing: *Drawing) void {
     drawing.data.deinit(drawing.allocator);
 }
 
+pub fn getLen(drawing: Drawing, index: u32) u32 {
+    return drawing.entries.items(.len)[index];
+}
+pub fn getLooped(drawing: Drawing, index: u32) bool {
+    return drawing.entries.items(.looped)[index];
+}
+pub fn getStyle(drawing: Drawing, index: u32) Style {
+    return drawing.entries.items(.style)[index];
+}
+
+pub fn getNext(drawing: Drawing, index: u32, node: u32) u32 {
+    return (node + 1) % drawing.getLen(index);
+}
+pub fn getPrev(drawing: Drawing, index: u32, node: u32) u32 {
+    return (node + drawing.getLen(index) - 1) % drawing.getLen(index);
+}
+
 fn getOffset(drawing: Drawing, index: u32) u32 {
     var offset: u32 = 0;
     for (drawing.entries.items(.len)[0..index]) |len|
         offset += len;
     return offset;
 }
-pub fn getLen(drawing: Drawing, index: u32) u32 {
-    return drawing.entries.items(.len)[index];
-}
 fn getAnglesLen(drawing: Drawing, index: u32) u32 {
-    return if (drawing.entries.items(.is_looped)[index]) drawing.getLen(index) else drawing.getLen(index) - 1;
+    return if (drawing.entries.items(.looped)[index]) drawing.getLen(index) else drawing.getLen(index) - 1;
 }
 
 pub fn getPositions(drawing: Drawing, index: u32) []geometry.Vec2 {
@@ -54,7 +68,7 @@ pub fn getPath(drawing: Drawing, index: u32) geometry.Path {
 
 pub fn addPoint(drawing: *Drawing, position: geometry.Vec2, style: Style) !void {
     try drawing.data.append(drawing.allocator, .{ .position = position });
-    try drawing.entries.append(drawing.allocator, .{ .len = 1, .is_looped = false, .style = style });
+    try drawing.entries.append(drawing.allocator, .{ .len = 1, .looped = false, .style = style });
 }
 
 pub fn appendPoint(drawing: *Drawing, index: u32, position: geometry.Vec2, angle: f32) !void {
@@ -67,7 +81,7 @@ pub fn appendPoint(drawing: *Drawing, index: u32, position: geometry.Vec2, angle
 /// Add segment from last to first node
 pub fn loopPath(drawing: *Drawing, index: u32, angle: f32) void {
     drawing.data.items(.angle)[drawing.getOffset(index) + drawing.getLen(index) - 1] = angle;
-    drawing.entries.items(.is_looped)[index] = true;
+    drawing.entries.items(.looped)[index] = true;
 }
 
 pub fn remove(drawing: *Drawing, index: u32) void {
