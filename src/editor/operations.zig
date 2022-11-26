@@ -8,7 +8,7 @@ const Drawing = @import("Drawing.zig");
 const Selection = @import("Selection.zig");
 const properties = @import("properties.zig");
 const snapping = @import("snapping.zig");
-const input = @import("input.zig");
+const state = @import("state.zig");
 
 const helper_color = [4]u8{ 255, 64, 64, 255 };
 
@@ -79,7 +79,7 @@ pub const AddPoint = struct {
     }
 
     pub fn drawHelper(op: AddPoint, _: Selection, buffer: *render.Buffer) !void {
-        try input.wideStroke().drawPoint(op.position.val, helper_color, buffer);
+        try state.wideStroke().drawPoint(op.position.val, helper_color, buffer);
     }
 };
 
@@ -114,20 +114,14 @@ pub const Append = struct {
         var out = try sel.cloneWithNothingSelected();
         if (interval.a == 0)
             out.drawing.reversePath(index);
-
-        var it = out.drawing.pathIterator();
-        while (it.next()) |path| {
-            const node = snapping.closestLooseEnd(path, op.position.val);
-            if (snapping.distToPoint(path.positions[node], op.position.val) < input.snapDist()) {
-                if (it.getIndex() == index and node != interval.a) {
+        if (snapping.snapToLooseEnd(sel.drawing, op.position.val)) |res| {
+            if (res.index == index) {
+                if (res.node != interval.a)
                     out.drawing.loopPath(index, op.angle);
-                    break;
-                }
-                if (it.getIndex() != index) {
-                    if (node != 0) out.drawing.reversePath(it.getIndex());
-                    out.drawing.joinPaths(index, it.getIndex(), op.angle);
-                    break;
-                }
+            } else {
+                if (res.node != 0)
+                    out.drawing.reversePath(res.index);
+                out.drawing.joinPaths(index, res.index, op.angle);
             }
         } else {
             try out.drawing.appendPoint(index, op.position.val, op.angle);
@@ -139,19 +133,13 @@ pub const Append = struct {
     pub fn drawHelper(op: Append, sel: Selection, buffer: *render.Buffer) !void {
         const index = sel.intervals.items(.index)[0];
         const interval = sel.intervals.items(.interval)[0];
-        const pos_a = sel.drawing.getPath(index).positions[interval.a];
-        var pos_b = op.position.val;
-        var it = sel.drawing.pathIterator();
-        while (it.next()) |path| {
-            const node = snapping.closestLooseEnd(path, op.position.val);
-            if (snapping.distToPoint(path.positions[node], op.position.val) < input.snapDist()) {
-                if (it.getIndex() != index or node != interval.a) {
-                    pos_b = path.positions[node];
-                    break;
-                }
-            }
-        }
-        try input.standardStroke().drawArc(.{ .pos_a = pos_a, .pos_b = pos_b }, helper_color, buffer);
+        try state.standardStroke().drawArc(.{
+            .pos_a = sel.drawing.getPath(index).positions[interval.a],
+            .pos_b = if (snapping.snapToLooseEnd(sel.drawing, op.position.val)) |res|
+                sel.drawing.getPositions(res.index)[res.node]
+            else
+                op.position.val,
+        }, helper_color, buffer);
     }
 };
 
@@ -241,8 +229,8 @@ pub const Move = struct {
     }
 
     pub fn drawHelper(op: Move, sel: Selection, buffer: *render.Buffer) !void {
-        try sel.drawApply(op.offset.val, transform, input.wideStroke(), helper_color, buffer);
-        try sel.drawApplyEdges(op.offset.val, transform, input.standardStroke(), helper_color, buffer);
+        try sel.drawApply(op.offset.val, transform, state.wideStroke(), helper_color, buffer);
+        try sel.drawApplyEdges(op.offset.val, transform, state.standardStroke(), helper_color, buffer);
     }
 };
 
@@ -359,6 +347,6 @@ pub const ChangeAngle = struct {
         const interval = sel.intervals.items(.interval)[0];
         var arc = path.getArc(interval.a);
         arc.angle = op.angle.val;
-        try input.standardStroke().drawArc(arc, helper_color, buffer);
+        try state.standardStroke().drawArc(arc, helper_color, buffer);
     }
 };

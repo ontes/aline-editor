@@ -7,14 +7,14 @@ const Selection = @import("editor/Selection.zig");
 const History = @import("editor/History.zig");
 const operations = @import("editor/operations.zig");
 const snapping = @import("editor/snapping.zig");
-const input = @import("editor/input.zig");
+const state = @import("editor/state.zig");
 
 const select_color = render.Color{ 255, 255, 64, 255 };
 
 var history: History = undefined;
 var pending_operation: ?operations.AnyOperation = null;
 
-const live_preview = false;
+const live_preview = true;
 var should_redraw_main = true;
 var should_redraw_helper = true;
 var should_update_transform = true;
@@ -50,8 +50,10 @@ pub fn updateOperation() !void {
 }
 
 fn finishOperation() !void {
-    if (!live_preview and isGrabbed())
-        try applyOperation();
+    if (isGrabbed()) {
+        if (!live_preview) try applyOperation();
+        should_redraw_helper = true;
+    }
     pending_operation = null;
 }
 
@@ -65,7 +67,7 @@ fn setOperation(operation: operations.AnyOperation) !void {
 fn selectPoint(pos: geometry.Vec2) !void {
     const sel = history.get();
     if (snapping.select(sel.drawing, pos)) |s| {
-        if (input.isCtrlPressed()) {
+        if (state.isCtrlPressed()) {
             try sel.togglePath(s.index);
         } else switch (s.val) {
             .node => |node| try sel.toggleNode(s.index, node),
@@ -99,11 +101,11 @@ fn selectRect(min_pos: geometry.Vec2, max_pos: geometry.Vec2) !void {
 }
 
 pub fn onEvent(event: platform.Event) !void {
-    input.onEvent(event);
+    state.onEvent(event);
     switch (event) {
         .key_press => |key| switch (key) {
             .mouse_left => if (!isGrabbed()) {
-                mouse_click_pos = input.mouseCanvasPos();
+                mouse_click_pos = state.mouseCanvasPos();
             },
             else => {},
         },
@@ -111,11 +113,11 @@ pub fn onEvent(event: platform.Event) !void {
             .mouse_left => if (!isGrabbed() and mouse_click_pos != null) {
                 try finishOperation();
 
-                if (!input.isShiftPressed())
+                if (!state.isShiftPressed())
                     history.get().deselectAll();
 
-                const mouse_pos = input.mouseCanvasPos();
-                if (snapping.distToPoint(mouse_pos, mouse_click_pos.?) < input.snapDist()) {
+                const mouse_pos = state.mouseCanvasPos();
+                if (snapping.distToPoint(mouse_pos, mouse_click_pos.?) < state.snapDist()) {
                     try selectPoint(mouse_pos);
                 } else {
                     try selectRect(@min(mouse_pos, mouse_click_pos.?), @max(mouse_pos, mouse_click_pos.?));
@@ -126,21 +128,21 @@ pub fn onEvent(event: platform.Event) !void {
             },
             .z => {
                 try finishOperation();
-                if (input.isCtrlPressed() and history.undo()) {
+                if (state.isCtrlPressed() and history.undo()) {
                     should_redraw_main = true;
                     should_redraw_helper = true;
                 }
             },
             .y => {
                 try finishOperation();
-                if (input.isCtrlPressed() and history.redo()) {
+                if (state.isCtrlPressed() and history.redo()) {
                     should_redraw_main = true;
                     should_redraw_helper = true;
                 }
             },
             .a => {
                 try finishOperation();
-                if (input.isCtrlPressed()) {
+                if (state.isCtrlPressed()) {
                     try history.get().selectAll();
                     should_redraw_helper = true;
                 } else if (operations.AddPoint.init(history.get().*)) |op| {
@@ -176,13 +178,13 @@ pub fn onEvent(event: platform.Event) !void {
             should_redraw_helper = true;
         },
         .mouse_move => {
-            if (input.isMouseMiddlePressed()) {
-                input.canvas_pan -= input.mouseCanvasOffset();
+            if (state.isMouseMiddlePressed()) {
+                state.canvas_pan -= state.mouseCanvasOffset();
                 should_update_transform = true;
             }
         },
         .mouse_scroll => |offset| {
-            input.canvas_zoom *= std.math.pow(f32, 0.8, @intToFloat(f32, offset));
+            state.canvas_zoom *= std.math.pow(f32, 0.8, @intToFloat(f32, offset));
             should_update_transform = true;
             should_redraw_helper = true;
         },
@@ -206,13 +208,13 @@ pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
         if (isGrabbed()) {
             try pending_operation.?.drawHelper(history.getPrev().*, helper_buffer);
         } else {
-            try history.get().drawSelected(input.wideStroke(), select_color, helper_buffer);
+            try history.get().drawSelected(state.wideStroke(), select_color, helper_buffer);
         }
         helper_buffer.flushPaths();
         should_redraw_helper = false;
     }
     if (should_update_transform) {
-        const transform = input.getTransform();
+        const transform = state.getTransform();
         main_buffer.setTransform(transform);
         helper_buffer.setTransform(transform);
         should_update_transform = false;

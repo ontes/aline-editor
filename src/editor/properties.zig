@@ -3,7 +3,7 @@ const render = @import("../render.zig");
 const geometry = @import("../geometry.zig");
 const platform = @import("../platform.zig");
 const editor = @import("../editor.zig");
-const input = @import("input.zig");
+const state = @import("state.zig");
 const Drawing = @import("Drawing.zig");
 const Selection = @import("Selection.zig");
 
@@ -19,7 +19,7 @@ pub const Position = struct {
 
     pub fn beginGrab(prop: *Position) void {
         prop.grab = .{ .old_val = prop.val };
-        prop.val = input.mouseCanvasPos();
+        prop.val = state.mouseCanvasPos();
     }
 
     pub fn finishGrab(prop: *Position) void {
@@ -35,7 +35,7 @@ pub const Position = struct {
         if (prop.isGrabbed()) {
             switch (event) {
                 .mouse_move => {
-                    prop.val = input.mouseCanvasPos();
+                    prop.val = state.mouseCanvasPos();
                     try editor.updateOperation();
                 },
                 .key_release => |key| switch (key) {
@@ -67,7 +67,7 @@ pub const Offset = struct {
     }
 
     pub fn beginGrab(prop: *Offset) void {
-        prop.grab = .{ .old_val = prop.val, .prev_mouse_pos = input.mouseCanvasPos() };
+        prop.grab = .{ .old_val = prop.val, .prev_mouse_pos = state.mouseCanvasPos() };
     }
 
     pub fn finishGrab(prop: *Offset) void {
@@ -83,8 +83,8 @@ pub const Offset = struct {
         if (prop.grab) |*grab| {
             switch (event) {
                 .mouse_move => {
-                    const mouse_pos = input.mouseCanvasPos();
-                    const multiplier: f32 = if (input.isShiftPressed()) 0.1 else 1;
+                    const mouse_pos = state.mouseCanvasPos();
+                    const multiplier: f32 = if (state.isShiftPressed()) 0.1 else 1;
                     prop.val += (mouse_pos - grab.prev_mouse_pos) * @splat(2, multiplier);
                     grab.prev_mouse_pos = mouse_pos;
                     try editor.updateOperation();
@@ -118,7 +118,7 @@ pub const Angle = struct {
     }
 
     pub fn beginGrab(prop: *Angle) void {
-        prop.grab = .{ .old_val = prop.val, .prev_mouse_pos = -input.mouseRelWinPos()[1] };
+        prop.grab = .{ .old_val = prop.val, .prev_mouse_pos = -state.mouseRelWinPos()[1] };
     }
 
     pub fn finishGrab(prop: *Angle) void {
@@ -134,8 +134,8 @@ pub const Angle = struct {
         if (prop.grab) |*grab| {
             switch (event) {
                 .mouse_move => {
-                    const mouse_pos = -input.mouseRelWinPos()[1];
-                    const multiplier: f32 = if (input.isShiftPressed()) 0.1 else 1;
+                    const mouse_pos = -state.mouseRelWinPos()[1];
+                    const multiplier: f32 = if (state.isShiftPressed()) 0.1 else 1;
                     prop.val = 2 * std.math.atan(@tan(prop.val / 2) + (mouse_pos - grab.prev_mouse_pos) * 5 * multiplier);
                     grab.prev_mouse_pos = mouse_pos;
                     try editor.updateOperation();
