@@ -8,9 +8,8 @@ const Drawing = @import("Drawing.zig");
 const Selection = @import("Selection.zig");
 const properties = @import("properties.zig");
 const snapping = @import("snapping.zig");
+const input = @import("input.zig");
 
-const basic_stroke = geometry.Stroke{ .width = 2, .cap = .round };
-const wide_stroke = geometry.Stroke{ .width = 4, .cap = .round };
 const helper_color = [4]u8{ 255, 64, 64, 255 };
 
 const default_style = Drawing.Style{
@@ -80,7 +79,7 @@ pub const AddPoint = struct {
     }
 
     pub fn drawHelper(op: AddPoint, _: Selection, buffer: *render.Buffer) !void {
-        try wide_stroke.drawPoint(op.position.val, helper_color, buffer);
+        try input.wideStroke().drawPoint(op.position.val, helper_color, buffer);
     }
 };
 
@@ -119,7 +118,7 @@ pub const Append = struct {
         var it = out.drawing.pathIterator();
         while (it.next()) |path| {
             const node = snapping.closestLooseEnd(path, op.position.val);
-            if (snapping.distToPoint(path.positions[node], op.position.val) < snapping.snap_dist) {
+            if (snapping.distToPoint(path.positions[node], op.position.val) < input.snapDist()) {
                 if (it.getIndex() == index and node != interval.a) {
                     out.drawing.loopPath(index, op.angle);
                     break;
@@ -145,14 +144,14 @@ pub const Append = struct {
         var it = sel.drawing.pathIterator();
         while (it.next()) |path| {
             const node = snapping.closestLooseEnd(path, op.position.val);
-            if (snapping.distToPoint(path.positions[node], op.position.val) < snapping.snap_dist) {
+            if (snapping.distToPoint(path.positions[node], op.position.val) < input.snapDist()) {
                 if (it.getIndex() != index or node != interval.a) {
                     pos_b = path.positions[node];
                     break;
                 }
             }
         }
-        try basic_stroke.drawArc(.{ .pos_a = pos_a, .pos_b = pos_b }, helper_color, buffer);
+        try input.standardStroke().drawArc(.{ .pos_a = pos_a, .pos_b = pos_b }, helper_color, buffer);
     }
 };
 
@@ -236,15 +235,14 @@ pub const Move = struct {
     }
 
     pub fn apply(op: Move, sel: Selection) !Selection {
-        std.debug.print("Move.\n", .{});
         var out = try sel.clone();
         out.apply(op.offset.val, transform);
         return out;
     }
 
     pub fn drawHelper(op: Move, sel: Selection, buffer: *render.Buffer) !void {
-        try sel.drawApply(op.offset.val, transform, wide_stroke, helper_color, buffer);
-        try sel.drawApplyEdges(op.offset.val, transform, basic_stroke, helper_color, buffer);
+        try sel.drawApply(op.offset.val, transform, input.wideStroke(), helper_color, buffer);
+        try sel.drawApplyEdges(op.offset.val, transform, input.standardStroke(), helper_color, buffer);
     }
 };
 
@@ -361,6 +359,6 @@ pub const ChangeAngle = struct {
         const interval = sel.intervals.items(.interval)[0];
         var arc = path.getArc(interval.a);
         arc.angle = op.angle.val;
-        try basic_stroke.drawArc(arc, helper_color, buffer);
+        try input.standardStroke().drawArc(arc, helper_color, buffer);
     }
 };

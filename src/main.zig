@@ -16,7 +16,7 @@ var time: i128 = undefined;
 
 fn init(allocator: std.mem.Allocator) !void {
     try platform.init();
-    window = try platform.Window.create(.{ 0, 0 }, .{ 1000, 1000 }, "Aline Editor");
+    window = try platform.Window.create(.{ 0, 0 }, .{ 1280, 720 }, "Aline Editor");
     window.show();
 
     context = try render.Context.init(window);

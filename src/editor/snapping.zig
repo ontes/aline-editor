@@ -1,9 +1,8 @@
 const std = @import("std");
 const geometry = @import("../geometry.zig");
 const vec2 = @import("../linalg.zig").vec(2, f32);
+const input = @import("input.zig");
 const Drawing = @import("Drawing.zig");
-
-pub const snap_dist = 10;
 
 pub fn distToPoint(pos_a: geometry.Vec2, pos_b: geometry.Vec2) f32 {
     return vec2.abs(pos_a - pos_b);
@@ -22,7 +21,7 @@ const SelectResult = struct {
 };
 pub fn select(drawing: Drawing, pos: geometry.Vec2) ?SelectResult {
     var result: ?SelectResult = null;
-    var best_dist: f32 = snap_dist;
+    var best_dist: f32 = input.snapDist();
     var it = drawing.reversePathIterator();
     while (it.next()) |path| {
         var node: u32 = 0;

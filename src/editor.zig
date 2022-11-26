@@ -2,8 +2,6 @@ const std = @import("std");
 const render = @import("render.zig");
 const geometry = @import("geometry.zig");
 const platform = @import("platform.zig");
-const vec2 = @import("linalg.zig").vec(2, f32);
-const mat3 = @import("linalg.zig").mat(3, f32);
 
 const Selection = @import("editor/Selection.zig");
 const History = @import("editor/History.zig");
@@ -11,14 +9,12 @@ const operations = @import("editor/operations.zig");
 const snapping = @import("editor/snapping.zig");
 const input = @import("editor/input.zig");
 
-const basic_stroke = geometry.Stroke{ .width = 2, .cap = .round };
-const wide_stroke = geometry.Stroke{ .width = 4, .cap = .round };
 const select_color = render.Color{ 255, 255, 64, 255 };
 
 var history: History = undefined;
 var pending_operation: ?operations.AnyOperation = null;
 
-const live_preview = true;
+const live_preview = false;
 var should_redraw_main = true;
 var should_redraw_helper = true;
 var should_update_transform = true;
@@ -53,7 +49,14 @@ pub fn updateOperation() !void {
     should_redraw_helper = true;
 }
 
+fn finishOperation() !void {
+    if (!live_preview and isGrabbed())
+        try applyOperation();
+    pending_operation = null;
+}
+
 fn setOperation(operation: operations.AnyOperation) !void {
+    try finishOperation();
     pending_operation = operation;
     try history.add(try history.get().clone());
     try updateOperation();
@@ -97,8 +100,6 @@ fn selectRect(min_pos: geometry.Vec2, max_pos: geometry.Vec2) !void {
 
 pub fn onEvent(event: platform.Event) !void {
     input.onEvent(event);
-    if (pending_operation) |*operation|
-        try operation.onEvent(event);
     switch (event) {
         .key_press => |key| switch (key) {
             .mouse_left => if (!isGrabbed()) {
@@ -106,66 +107,89 @@ pub fn onEvent(event: platform.Event) !void {
             },
             else => {},
         },
-        .key_release => |key| {
-            if (!live_preview and isGrabbed())
-                try applyOperation();
-            switch (key) {
-                .mouse_left => if (!isGrabbed() and mouse_click_pos != null) {
-                    if (!input.isShiftPressed())
-                        history.get().deselectAll();
-                    const mouse_pos = input.mouseCanvasPos();
-                    if (snapping.distToPoint(mouse_pos, mouse_click_pos.?) < snapping.snap_dist) {
-                        try selectPoint(mouse_pos);
-                    } else {
-                        try selectRect(@min(mouse_pos, mouse_click_pos.?), @max(mouse_pos, mouse_click_pos.?));
-                    }
-                    mouse_click_pos = null;
-                    pending_operation = null;
+        .key_release => |key| switch (key) {
+            .mouse_left => if (!isGrabbed() and mouse_click_pos != null) {
+                try finishOperation();
+
+                if (!input.isShiftPressed())
+                    history.get().deselectAll();
+
+                const mouse_pos = input.mouseCanvasPos();
+                if (snapping.distToPoint(mouse_pos, mouse_click_pos.?) < input.snapDist()) {
+                    try selectPoint(mouse_pos);
+                } else {
+                    try selectRect(@min(mouse_pos, mouse_click_pos.?), @max(mouse_pos, mouse_click_pos.?));
+                }
+
+                should_redraw_helper = true;
+                mouse_click_pos = null;
+            },
+            .z => {
+                try finishOperation();
+                if (input.isCtrlPressed() and history.undo()) {
+                    should_redraw_main = true;
                     should_redraw_helper = true;
-                },
-                .z => if (input.isCtrlPressed()) {
-                    if (history.undo()) {
-                        pending_operation = null;
-                        should_redraw_main = true;
-                        should_redraw_helper = true;
-                    }
-                },
-                .y => if (input.isCtrlPressed()) {
-                    if (history.redo()) {
-                        pending_operation = null;
-                        should_redraw_main = true;
-                        should_redraw_helper = true;
-                    }
-                },
-                .a => if (input.isCtrlPressed()) {
-                    if (!isGrabbed()) {
-                        try history.get().selectAll();
-                        pending_operation = null;
-                        should_redraw_helper = true;
-                    }
+                }
+            },
+            .y => {
+                try finishOperation();
+                if (input.isCtrlPressed() and history.redo()) {
+                    should_redraw_main = true;
+                    should_redraw_helper = true;
+                }
+            },
+            .a => {
+                try finishOperation();
+                if (input.isCtrlPressed()) {
+                    try history.get().selectAll();
+                    should_redraw_helper = true;
                 } else if (operations.AddPoint.init(history.get().*)) |op| {
                     try setOperation(.{ .AddPoint = op });
                 } else if (operations.Append.init(history.get().*)) |op| {
                     try setOperation(.{ .Append = op });
-                },
-                .c => if (operations.Connect.init(history.get().*)) |op| {
+                }
+            },
+            .c => {
+                try finishOperation();
+                if (operations.Connect.init(history.get().*)) |op|
                     try setOperation(.{ .Connect = op });
-                },
-                .g => if (operations.Move.init(history.get().*)) |op| {
+            },
+            .g => {
+                try finishOperation();
+                if (operations.Move.init(history.get().*)) |op|
                     try setOperation(.{ .Move = op });
-                },
-                .d => if (operations.ChangeAngle.init(history.get().*)) |op| {
+            },
+            .d => {
+                try finishOperation();
+                if (operations.ChangeAngle.init(history.get().*)) |op|
                     try setOperation(.{ .ChangeAngle = op });
-                },
-                .delete => if (operations.Delete.init(history.get().*)) |op| {
+            },
+            .delete => {
+                try finishOperation();
+                if (operations.Delete.init(history.get().*)) |op|
                     try setOperation(.{ .Delete = op });
-                },
-                else => {},
+            },
+            else => {},
+        },
+        .window_resize => {
+            should_update_transform = true;
+            should_redraw_helper = true;
+        },
+        .mouse_move => {
+            if (input.isMouseMiddlePressed()) {
+                input.canvas_pan -= input.mouseCanvasOffset();
+                should_update_transform = true;
             }
         },
-        .window_resize => should_update_transform = true,
+        .mouse_scroll => |offset| {
+            input.canvas_zoom *= std.math.pow(f32, 0.8, @intToFloat(f32, offset));
+            should_update_transform = true;
+            should_redraw_helper = true;
+        },
         else => {},
     }
+    if (pending_operation) |*operation|
+        try operation.onEvent(event);
 }
 
 pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
@@ -179,18 +203,16 @@ pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
     }
     if (should_redraw_helper) {
         helper_buffer.clearPaths();
-        if (pending_operation != null and pending_operation.?.isGrabbed()) {
+        if (isGrabbed()) {
             try pending_operation.?.drawHelper(history.getPrev().*, helper_buffer);
         } else {
-            try history.get().drawSelected(wide_stroke, select_color, helper_buffer);
+            try history.get().drawSelected(input.wideStroke(), select_color, helper_buffer);
         }
         helper_buffer.flushPaths();
         should_redraw_helper = false;
     }
     if (should_update_transform) {
-        const size = input.windowSize();
-        const scale = @Vector(3, f32){ 2 / @intToFloat(f32, size[0]), 2 / @intToFloat(f32, size[1]), 1 };
-        const transform = mat3.mult(mat3.translate(.{ -1, -1 }), mat3.scale(scale));
+        const transform = input.getTransform();
         main_buffer.setTransform(transform);
         helper_buffer.setTransform(transform);
         should_update_transform = false;
