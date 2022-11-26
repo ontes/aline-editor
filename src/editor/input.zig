@@ -27,8 +27,8 @@ pub fn onEvent(event: platform.Event) void {
 
 fn windowPosToCanvasPos(pos: [2]i32) geometry.Vec2 {
     return .{
-        @intToFloat(f32, pos[0]) / @intToFloat(f32, window_size[0]) * 2 - 1,
-        @intToFloat(f32, pos[1]) / @intToFloat(f32, window_size[1]) * -2 + 1,
+        @intToFloat(f32, pos[0]),
+        @intToFloat(f32, window_size[1]) - @intToFloat(f32, pos[1]),
     };
 }
 
@@ -54,4 +54,8 @@ pub fn isShiftPressed() bool {
 }
 pub fn isAltPressed() bool {
     return alt_pressed;
+}
+
+pub fn windowSize() [2]u32 {
+    return window_size;
 }

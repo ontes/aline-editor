@@ -206,7 +206,7 @@ pub fn draw(drawing: Drawing, buffer: *render.Buffer) !void {
     while (it.next()) |path| {
         const style = it.getStyle();
         if (path.isLooped())
-            try buffer.append(path, style.fill_color);
+            try buffer.appendPath(path, style.fill_color);
         try style.stroke.drawPath(path, style.stroke_color, buffer);
     }
 }

@@ -8,23 +8,8 @@ pub const Vec2 = vec2.Vector;
 pub fn normal(vec: Vec2) Vec2 {
     return .{ -vec[1], vec[0] };
 }
-
 pub fn rotate(vec: Vec2, angle: f32) Vec2 {
     return mat2.multVec(mat2.rotate(0, 1, angle), vec);
-}
-
-pub fn angleBetween(dir_a: Vec2, dir_b: Vec2) f32 {
-    return std.math.atan2(f32, dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0], dir_a[0] * dir_b[0] + dir_a[1] * dir_b[1]);
-}
-
-pub fn oppositeAngle(angle: f32) f32 {
-    return if (angle > 0) std.math.pi - angle else -std.math.pi - angle;
-}
-
-/// Solves equation pos_a + p * dir_a = pos_b + q * dir_b, returns p
-pub fn linesIntersection(pos_a: Vec2, dir_a: Vec2, pos_b: Vec2, dir_b: Vec2) f32 {
-    const pos = pos_b - pos_a;
-    return (pos[0] * dir_b[1] - pos[1] * dir_b[0]) / (dir_a[0] * dir_b[1] - dir_a[1] * dir_b[0]);
 }
 
 pub const Arc = struct {
@@ -82,7 +67,9 @@ pub const Arc = struct {
 
     /// Get angle of arc that contains given point (angle of given arc is ignored)
     pub fn angleOnPoint(arc: Arc, point_pos: Vec2) f32 {
-        return oppositeAngle(angleBetween(arc.pos_a - point_pos, arc.pos_b - point_pos));
+        const vec_a = arc.pos_a - point_pos;
+        const vec_b = arc.pos_b - point_pos;
+        return std.math.atan2(f32, -vec2.dot(vec_a, normal(vec_b)), -vec2.dot(vec_a, vec_b));
     }
 };
 
@@ -117,10 +104,10 @@ pub const Path = struct {
         var index: u32 = 0;
         while (index < path.len()) : (index += 1) {
             const arc = path.getArc(index);
-            if ((point_pos[1] < arc.pos_a[1]) != (point_pos[1] < arc.pos_b[1]) and
-                linesIntersection(point_pos, .{ 1, 0 }, arc.pos_a, arc.pos_b - arc.pos_a) > 0)
-                inside = !inside;
             const point_angle = arc.angleOnPoint(point_pos);
+            if (std.math.sign(point_angle) == std.math.sign(arc.pos_a[0] - point_pos[0]) and
+                std.math.sign(point_angle) == std.math.sign(point_pos[0] - arc.pos_b[0]))
+                inside = !inside;
             if (std.math.sign(point_angle) == std.math.sign(arc.angle) and @fabs(point_angle) < @fabs(arc.angle))
                 inside = !inside;
         }
@@ -166,26 +153,26 @@ pub const Stroke = struct {
         switch (stroke.cap) {
             .none => {},
             .round => {
-                try buffer.append(.{
+                try buffer.appendPath(.{
                     .positions = &.{ pos, pos + normal_a, pos + normal_b },
                     .angles = &.{ 0, Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, sdir), 0 },
                 }, color);
             },
             .bevel => {
-                try buffer.append(.{
+                try buffer.appendPath(.{
                     .positions = &.{ pos, pos + normal_a, pos + normal_b },
                     .angles = &.{ 0, 0, 0 },
                 }, color);
             },
             .miter => {
-                const tip_dist = linesIntersection(.{ 0, 0 }, sdir, normal_a, dir_a);
+                const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (sdir[0] * dir_a[1] - sdir[1] * dir_a[0]);
                 if (tip_dist > 0 and tip_dist < 8) {
-                    try buffer.append(.{
+                    try buffer.appendPath(.{
                         .positions = &.{ pos, pos + normal_a, pos + sdir * vec2.splat(tip_dist), pos + normal_b },
                         .angles = &.{ 0, 0, 0, 0 },
                     }, color);
                 } else {
-                    try buffer.append(.{
+                    try buffer.appendPath(.{
                         .positions = &.{ pos, pos + normal_a, pos + normal_a + sdir_a, pos + normal_b + sdir_b, pos + normal_b },
                         .angles = &.{ 0, 0, 0, 0, 0 },
                     }, color);
@@ -198,7 +185,7 @@ pub const Stroke = struct {
         const normal_a = vec2.normalize(normal(arc.dirA())) * vec2.splat(stroke.width);
         const normal_b = vec2.normalize(normal(arc.dirB())) * vec2.splat(stroke.width);
 
-        try buffer.append(.{
+        try buffer.appendPath(.{
             .positions = &.{ arc.pos_a + normal_a, arc.pos_b - normal_b, arc.pos_b + normal_b, arc.pos_a - normal_a },
             .angles = &.{ arc.angle, 0, -arc.angle, 0 },
         }, color);

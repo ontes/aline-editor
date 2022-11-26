@@ -9,12 +9,12 @@ const Selection = @import("Selection.zig");
 const properties = @import("properties.zig");
 const snapping = @import("snapping.zig");
 
-const basic_stroke = geometry.Stroke{ .width = 0.005, .cap = .round };
-const wide_stroke = geometry.Stroke{ .width = 0.01, .cap = .round };
+const basic_stroke = geometry.Stroke{ .width = 2, .cap = .round };
+const wide_stroke = geometry.Stroke{ .width = 4, .cap = .round };
 const helper_color = [4]u8{ 255, 64, 64, 255 };
 
 const default_style = Drawing.Style{
-    .stroke = .{ .width = 0.005, .cap = .round },
+    .stroke = .{ .width = 2, .cap = .round },
     .fill_color = .{ 64, 64, 64, 255 },
     .stroke_color = .{ 255, 255, 255, 255 },
 };

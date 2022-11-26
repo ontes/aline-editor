@@ -4,6 +4,7 @@ const render = @import("../render.zig");
 const webgpu = @import("../bindings/webgpu.zig");
 const webgpu_utils = @import("webgpu_utils.zig");
 const geometry = @import("../geometry.zig");
+const mat3 = @import("../linalg.zig").mat(3, f32);
 
 const err = error.RendererError;
 
@@ -15,26 +16,23 @@ const vs_source =
     \\      max_pos: vec2<f32>,
     \\      color: vec4<f32>,
     \\  }
-    \\  @group(0) @binding(0) var<storage> paths: array<PathEntry>;
     \\  struct VertexOut {
     \\      @builtin(position) screen_pos: vec4<f32>,
     \\      @location(0) pos: vec2<f32>,
     \\      @location(1) @interpolate(flat) instance_index: u32,
     \\  }
-    \\  @vertex
-    \\  fn main(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> VertexOut {
+    \\  @group(0) @binding(0) var<uniform> transform: mat3x3<f32>;
+    \\  @group(0) @binding(1) var<storage> paths: array<PathEntry>;
+    \\  @vertex fn main(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instance_index: u32) -> VertexOut {
     \\      let p = paths[instance_index];
-    \\      let positions = array<vec2<f32>,4>(
+    \\      let pos = array<vec2<f32>,4>(
     \\          p.min_pos,
     \\          vec2<f32>(p.min_pos.x, p.max_pos.y),
     \\          vec2<f32>(p.max_pos.x, p.min_pos.y),
     \\          p.max_pos
-    \\      );
-    \\      var out: VertexOut;
-    \\      out.pos = positions[vertex_index];
-    \\      out.screen_pos = vec4<f32>(out.pos, 0, 1);
-    \\      out.instance_index = instance_index;
-    \\      return out;
+    \\      )[vertex_index];
+    \\      let transformed_pos = transform * vec3<f32>(pos, 1);
+    \\      return VertexOut(vec4<f32>(transformed_pos.xy, 0, transformed_pos.z), pos, instance_index);
     \\  }
 ;
 
@@ -46,33 +44,23 @@ const fs_source =
     \\      max_pos: vec2<f32>,
     \\      color: vec4<f32>,
     \\  }
-    \\  @group(0) @binding(0) var<storage> paths: array<PathEntry>;
-    \\  @group(0) @binding(1) var<storage> positions: array<vec2<f32>>;
-    \\  @group(0) @binding(2) var<storage> angles: array<f32>;
-    \\  @fragment
-    \\  fn main(@location(0) pos: vec2<f32>, @location(1) @interpolate(flat) instance_index: u32) -> @location(0) vec4<f32> {
+    \\  @group(0) @binding(1) var<storage> paths: array<PathEntry>;
+    \\  @group(0) @binding(2) var<storage> positions: array<vec2<f32>>;
+    \\  @group(0) @binding(3) var<storage> angles: array<f32>;
+    \\  @fragment fn main(@location(0) pos: vec2<f32>, @location(1) @interpolate(flat) instance_index: u32) -> @location(0) vec4<f32> {
     \\      let p = paths[instance_index];
     \\      var inside: bool = false;
     \\      for (var i: u32 = 0; i < p.len; i++) {
-    \\          let j = (i + 1) % p.len;
-    \\          inside = (inside != isCrossingLine(pos, positions[p.offset + i], positions[p.offset + j]));
-    \\          inside = (inside != isInArc(pos, positions[p.offset + i], positions[p.offset + j], angles[p.offset + i]));
+    \\          let angle = angles[p.offset + i];
+    \\          let vec_a = positions[p.offset + i] - pos;
+    \\          let vec_b = positions[p.offset + (i + 1) % p.len] - pos;
+    \\          let pos_angle = atan2(-dot(vec_a, vec2<f32>(-vec_b.y, vec_b.x)), -dot(vec_a, vec_b));
+    \\          let crossing_line = (sign(pos_angle) == sign(vec_a.x)) & (sign(pos_angle) == sign(-vec_b.x));
+    \\          let inside_arc = (sign(pos_angle) == sign(angle)) & (abs(pos_angle) < abs(angle));
+    \\          inside = (inside != (crossing_line != inside_arc));
     \\      }
     \\      if (!inside) { discard; }
     \\      return p.color;
-    \\  }
-    \\  fn isCrossingLine(pos: vec2<f32>, pos_a: vec2<f32>, pos_b: vec2<f32>) -> bool {
-    \\      return ((pos.y < pos_a.y) != (pos.y < pos_b.y)) &
-    \\          (pos.x < (pos_b.x - pos_a.x) / (pos_b.y - pos_a.y) * (pos.y - pos_a.y) + pos_a.x);
-    \\  }
-    \\  fn arcAngle(pos: vec2<f32>, pos_a: vec2<f32>, pos_b: vec2<f32>) -> f32 {
-    \\      let vec_a = pos_a - pos;
-    \\      let vec_b = pos - pos_b;
-    \\      return -atan2(vec_a.x * vec_b.y - vec_a.y * vec_b.x, vec_a.x * vec_b.x + vec_a.y * vec_b.y);
-    \\  }
-    \\  fn isInArc(pos: vec2<f32>, pos_a: vec2<f32>, pos_b: vec2<f32>, angle: f32) -> bool {
-    \\      let pos_angle = arcAngle(pos, pos_a, pos_b);
-    \\      return (sign(pos_angle) == sign(angle)) & (abs(pos_angle) < abs(angle));
     \\  }
 ;
 
@@ -101,11 +89,12 @@ pub const Context = struct {
         const swapchain = webgpu_utils.createSwapchain(device, surface, try window.getSize());
 
         const bind_group_layout = device.createBindGroupLayout(&.{
-            .entry_count = 3,
-            .entries = &[3]webgpu.BindGroupLayoutEntry{
-                .{ .binding = 0, .visibility = .{ .vertex = true, .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
-                .{ .binding = 1, .visibility = .{ .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
+            .entry_count = 4,
+            .entries = &[4]webgpu.BindGroupLayoutEntry{
+                .{ .binding = 0, .visibility = .{ .vertex = true }, .buffer = .{ .binding_type = .uniform } },
+                .{ .binding = 1, .visibility = .{ .vertex = true, .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
                 .{ .binding = 2, .visibility = .{ .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
+                .{ .binding = 3, .visibility = .{ .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
             },
         });
 
@@ -191,6 +180,7 @@ pub const Buffer = struct {
     context: Context,
     allocator: std.mem.Allocator,
 
+    transform_buffer: webgpu.Buffer,
     paths_buffer: webgpu.Buffer,
     positions_buffer: webgpu.Buffer,
     angles_buffer: webgpu.Buffer,
@@ -205,6 +195,7 @@ pub const Buffer = struct {
         return .{
             .context = context,
             .allocator = allocator,
+            .transform_buffer = context.device.createBuffer(&.{ .usage = .{ .uniform = true, .copy_dst = true }, .size = @sizeOf(mat3.Matrix) }),
             .paths_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
             .positions_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
             .angles_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
@@ -220,13 +211,13 @@ pub const Buffer = struct {
         buffer.angles.deinit(buffer.allocator);
     }
 
-    pub fn clear(buffer: *Buffer) void {
+    pub fn clearPaths(buffer: *Buffer) void {
         buffer.paths.clearRetainingCapacity();
         buffer.positions.clearRetainingCapacity();
         buffer.angles.clearRetainingCapacity();
     }
 
-    pub fn append(buffer: *Buffer, path: geometry.Path, color: [4]u8) !void {
+    pub fn appendPath(buffer: *Buffer, path: geometry.Path, color: [4]u8) !void {
         std.debug.assert(path.isLooped());
         if (path.len() < 2) return;
 
@@ -250,7 +241,7 @@ pub const Buffer = struct {
         try buffer.angles.appendSlice(buffer.allocator, path.angles);
     }
 
-    pub fn flush(buffer: *Buffer) void {
+    pub fn flushPaths(buffer: *Buffer) void {
         const paths_size = buffer.paths.items.len * @sizeOf(PathEntry);
         const positions_size = buffer.positions.items.len * @sizeOf(geometry.Vec2);
         const angles_size = buffer.angles.items.len * @sizeOf(f32);
@@ -285,13 +276,18 @@ pub const Buffer = struct {
 
         buffer.bind_group = if (paths_size > 0) buffer.context.device.createBindGroup(&.{
             .layout = buffer.context.bind_group_layout,
-            .entry_count = 3,
-            .entries = &[3]webgpu.BindGroupEntry{
-                .{ .binding = 0, .buffer = buffer.paths_buffer, .offset = 0, .size = paths_size },
-                .{ .binding = 1, .buffer = buffer.positions_buffer, .offset = 0, .size = positions_size },
-                .{ .binding = 2, .buffer = buffer.angles_buffer, .offset = 0, .size = angles_size },
+            .entry_count = 4,
+            .entries = &[4]webgpu.BindGroupEntry{
+                .{ .binding = 0, .buffer = buffer.transform_buffer, .offset = 0, .size = @sizeOf(mat3.Matrix) },
+                .{ .binding = 1, .buffer = buffer.paths_buffer, .offset = 0, .size = paths_size },
+                .{ .binding = 2, .buffer = buffer.positions_buffer, .offset = 0, .size = positions_size },
+                .{ .binding = 3, .buffer = buffer.angles_buffer, .offset = 0, .size = angles_size },
             },
         }) else null;
+    }
+
+    pub fn setTransform(buffer: *Buffer, transform: mat3.Matrix) void {
+        buffer.context.device.getQueue().writeBuffer(buffer.transform_buffer, 0, &transform, @sizeOf(mat3.Matrix));
     }
 };
 

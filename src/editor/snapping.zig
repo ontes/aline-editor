@@ -3,7 +3,7 @@ const geometry = @import("../geometry.zig");
 const vec2 = @import("../linalg.zig").vec(2, f32);
 const Drawing = @import("Drawing.zig");
 
-pub const snap_dist = 0.05;
+pub const snap_dist = 10;
 
 pub fn distToPoint(pos_a: geometry.Vec2, pos_b: geometry.Vec2) f32 {
     return vec2.abs(pos_a - pos_b);

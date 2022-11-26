@@ -3,6 +3,7 @@ const render = @import("render.zig");
 const geometry = @import("geometry.zig");
 const platform = @import("platform.zig");
 const vec2 = @import("linalg.zig").vec(2, f32);
+const mat3 = @import("linalg.zig").mat(3, f32);
 
 const Selection = @import("editor/Selection.zig");
 const History = @import("editor/History.zig");
@@ -10,8 +11,8 @@ const operations = @import("editor/operations.zig");
 const snapping = @import("editor/snapping.zig");
 const input = @import("editor/input.zig");
 
-const basic_stroke = geometry.Stroke{ .width = 0.005, .cap = .round };
-const wide_stroke = geometry.Stroke{ .width = 0.01, .cap = .round };
+const basic_stroke = geometry.Stroke{ .width = 2, .cap = .round };
+const wide_stroke = geometry.Stroke{ .width = 4, .cap = .round };
 const select_color = render.Color{ 255, 255, 64, 255 };
 
 var history: History = undefined;
@@ -20,6 +21,9 @@ var pending_operation: ?operations.AnyOperation = null;
 const live_preview = true;
 var should_redraw_main = true;
 var should_redraw_helper = true;
+var should_update_transform = true;
+
+var mouse_click_pos: ?geometry.Vec2 = null;
 
 pub fn init(allocator: std.mem.Allocator) !void {
     history = History.init(allocator);
@@ -54,8 +58,6 @@ fn setOperation(operation: operations.AnyOperation) !void {
     try history.add(try history.get().clone());
     try updateOperation();
 }
-
-var mouse_click_pos: ?geometry.Vec2 = null;
 
 fn selectPoint(pos: geometry.Vec2) !void {
     const sel = history.get();
@@ -161,28 +163,37 @@ pub fn onEvent(event: platform.Event) !void {
                 else => {},
             }
         },
+        .window_resize => should_update_transform = true,
         else => {},
     }
 }
 
 pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
-    if (!should_redraw_main and !should_redraw_helper)
+    if (!should_redraw_main and !should_redraw_helper and !should_update_transform)
         return false;
     if (should_redraw_main) {
-        main_buffer.clear();
+        main_buffer.clearPaths();
         try history.get().drawing.draw(main_buffer);
-        main_buffer.flush();
+        main_buffer.flushPaths();
         should_redraw_main = false;
     }
     if (should_redraw_helper) {
-        helper_buffer.clear();
+        helper_buffer.clearPaths();
         if (pending_operation != null and pending_operation.?.isGrabbed()) {
             try pending_operation.?.drawHelper(history.getPrev().*, helper_buffer);
         } else {
             try history.get().drawSelected(wide_stroke, select_color, helper_buffer);
         }
-        helper_buffer.flush();
+        helper_buffer.flushPaths();
         should_redraw_helper = false;
+    }
+    if (should_update_transform) {
+        const size = input.windowSize();
+        const scale = @Vector(3, f32){ 2 / @intToFloat(f32, size[0]), 2 / @intToFloat(f32, size[1]), 1 };
+        const transform = mat3.mult(mat3.translate(.{ -1, -1 }), mat3.scale(scale));
+        main_buffer.setTransform(transform);
+        helper_buffer.setTransform(transform);
+        should_update_transform = false;
     }
     return true;
 }

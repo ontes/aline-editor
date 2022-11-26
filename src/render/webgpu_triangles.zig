@@ -158,12 +158,12 @@ pub const Buffer = struct {
         buffer.indices.deinit(buffer.allocator);
     }
 
-    pub fn clear(buffer: *Buffer) void {
+    pub fn clearPaths(buffer: *Buffer) void {
         buffer.vertices.clearRetainingCapacity();
         buffer.indices.clearRetainingCapacity();
     }
 
-    pub fn append(buffer: *Buffer, path: geometry.Path, color: [4]u8) !void {
+    pub fn appendPath(buffer: *Buffer, path: geometry.Path, color: [4]u8) !void {
         std.debug.assert(path.isLooped());
         const first_index = @intCast(u32, buffer.vertices.items.len);
 
@@ -183,7 +183,7 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn flush(buffer: *Buffer) void {
+    pub fn flushPaths(buffer: *Buffer) void {
         const vertices_size = buffer.vertices.items.len * @sizeOf(Vertex);
         const indices_size = buffer.indices.items.len * @sizeOf(u32);
 
