@@ -139,14 +139,17 @@ pub const Stroke = struct {
     };
 
     fn drawCap(stroke: Stroke, pos: Vec2, dir_a: Vec2, dir_b: Vec2, color: render.Color, buffer: *render.Buffer) !void {
-        if (vec2.dot(dir_a, dir_b) == 0)
-            return; // directions are opposite, no cap is needed
+        const ndir_a = -vec2.normalize(dir_a);
+        const ndir_b = -vec2.normalize(dir_b);
 
-        const sdir_a = vec2.normalize(-dir_a) * vec2.splat(stroke.width);
-        const sdir_b = vec2.normalize(-dir_b) * vec2.splat(stroke.width);
-        const sdir = if (vec2.dot(dir_a, dir_b) == 1) sdir_a else vec2.normalize(sdir_a + sdir_b) * vec2.splat(stroke.width);
+        const dot = vec2.dot(ndir_a, ndir_b);
+        if (dot == -1) return; // directions are opposite, no cap is needed
 
-        const side = vec2.dot(normal(sdir_a), sdir_b) < 0;
+        const sdir = (if (dot == 1) ndir_a else vec2.normalize(ndir_a + ndir_b)) * vec2.splat(stroke.width);
+        const sdir_a = ndir_a * vec2.splat(stroke.width);
+        const sdir_b = ndir_b * vec2.splat(stroke.width);
+
+        const side = vec2.dot(normal(ndir_a), ndir_b) < 0;
         const normal_a = if (side) -normal(sdir_a) else normal(sdir_a);
         const normal_b = if (side) normal(sdir_b) else -normal(sdir_b);
 

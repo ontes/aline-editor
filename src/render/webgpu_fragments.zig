@@ -55,8 +55,8 @@ const fs_source =
     \\          let vec_a = positions[p.offset + i] - pos;
     \\          let vec_b = positions[p.offset + (i + 1) % p.len] - pos;
     \\          let pos_angle = atan2(-dot(vec_a, vec2<f32>(-vec_b.y, vec_b.x)), -dot(vec_a, vec_b));
-    \\          let crossing_line = (sign(pos_angle) == sign(vec_a.x)) & (sign(pos_angle) == sign(-vec_b.x));
-    \\          let inside_arc = (sign(pos_angle) == sign(angle)) & (abs(pos_angle) < abs(angle));
+    \\          let crossing_line = ((pos_angle > 0) == (vec_a.x > 0)) & ((pos_angle > 0) != (vec_b.x > 0));
+    \\          let inside_arc = ((pos_angle > 0) == (angle > 0)) & (abs(pos_angle) < abs(angle));
     \\          inside = (inside != (crossing_line != inside_arc));
     \\      }
     \\      if (!inside) { discard; }
