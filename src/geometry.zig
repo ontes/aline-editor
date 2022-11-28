@@ -147,10 +147,64 @@ pub const Circle = struct {
     }
 };
 
-// pub const Square = struct {
-//     pos: Vec2,
-//     radius: Vec2,
+pub const Rect = struct {
+    pos: Vec2,
+    radius: Vec2,
 
-//     pub fn generate(square: Square, gen: anytype) !void {
-//     }
-// };
+    pub fn generate(rect: Rect, gen: anytype) !void {
+        var pass = gen.begin();
+        try pass.add(rect.pos + Vec2{ rect.radius[0], rect.radius[1] }, 0);
+        try pass.add(rect.pos + Vec2{ rect.radius[0], -rect.radius[1] }, 0);
+        try pass.add(rect.pos + Vec2{ -rect.radius[0], -rect.radius[1] }, 0);
+        try pass.end(rect.pos + Vec2{ -rect.radius[0], rect.radius[1] }, 0);
+    }
+};
+
+pub const Stadium = struct {
+    pos: Vec2,
+    radius: Vec2,
+
+    pub fn generate(stadium: Stadium, gen: anytype) !void {
+        if (stadium.radius[0] == stadium.radius[1]) {
+            try Circle.generate(.{ .pos = stadium.pos, .radius = stadium.radius[0] }, gen);
+        } else if (stadium.radius[0] < stadium.radius[1]) {
+            const diff = stadium.radius[1] - stadium.radius[0];
+            var pass = gen.begin();
+            try pass.add(stadium.pos + Vec2{ stadium.radius[0], diff }, 0);
+            try pass.add(stadium.pos + Vec2{ stadium.radius[0], -diff }, std.math.pi / 2.0);
+            try pass.add(stadium.pos + Vec2{ -stadium.radius[0], -diff }, 0);
+            try pass.end(stadium.pos + Vec2{ -stadium.radius[0], diff }, std.math.pi / 2.0);
+        } else {
+            const diff = stadium.radius[0] - stadium.radius[1];
+            var pass = gen.begin();
+            try pass.add(stadium.pos + Vec2{ diff, stadium.radius[1] }, std.math.pi / 2.0);
+            try pass.add(stadium.pos + Vec2{ diff, -stadium.radius[1] }, 0);
+            try pass.add(stadium.pos + Vec2{ -diff, -stadium.radius[1] }, std.math.pi / 2.0);
+            try pass.end(stadium.pos + Vec2{ -diff, stadium.radius[1] }, 0);
+        }
+    }
+};
+
+pub const RoundedRect = struct {
+    pos: Vec2,
+    radius: Vec2,
+    corner_radius: f32,
+
+    pub fn generate(rect: RoundedRect, gen: anytype) !void {
+        if (rect.corner_radius == 0) {
+            try Rect.generate(.{ .pos = rect.pos, .radius = rect.radius }, gen);
+        } else if (rect.corner_radius >= @min(rect.radius[0], rect.radius[1])) {
+            try Stadium.generate(.{ .pos = rect.pos, .radius = rect.radius }, gen);
+        } else {
+            var pass = gen.begin();
+            try pass.add(rect.pos + Vec2{ rect.radius[0], rect.radius[1] - rect.corner_radius }, 0);
+            try pass.add(rect.pos + Vec2{ rect.radius[0], -(rect.radius[1] - rect.corner_radius) }, std.math.pi / 4.0);
+            try pass.add(rect.pos + Vec2{ rect.radius[0] - rect.corner_radius, -rect.radius[1] }, 0);
+            try pass.add(rect.pos + Vec2{ -(rect.radius[0] - rect.corner_radius), -rect.radius[1] }, std.math.pi / 4.0);
+            try pass.add(rect.pos + Vec2{ -rect.radius[0], -(rect.radius[1] - rect.corner_radius) }, 0);
+            try pass.add(rect.pos + Vec2{ -rect.radius[0], rect.radius[1] - rect.corner_radius }, std.math.pi / 4.0);
+            try pass.add(rect.pos + Vec2{ -(rect.radius[0] - rect.corner_radius), rect.radius[1] }, 0);
+            try pass.end(rect.pos + Vec2{ rect.radius[0] - rect.corner_radius, rect.radius[1] }, std.math.pi / 4.0);
+        }
+    }
+};
