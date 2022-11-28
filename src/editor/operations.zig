@@ -3,14 +3,14 @@ const render = @import("../render.zig");
 const geometry = @import("../geometry.zig");
 const platform = @import("../platform.zig");
 const editor = @import("../editor.zig");
+const generators = @import("../generators.zig");
+const mat3 = @import("../linalg.zig").mat(3, f32);
 
 const Drawing = @import("Drawing.zig");
 const Selection = @import("Selection.zig");
 const properties = @import("properties.zig");
 const snapping = @import("snapping.zig");
 const state = @import("state.zig");
-
-const helper_color = [4]u8{ 255, 64, 64, 255 };
 
 const default_style = Drawing.Style{
     .stroke = .{ .width = 2, .cap = .round },
@@ -44,9 +44,9 @@ pub const AnyOperation = union(enum) {
         };
     }
 
-    pub fn drawHelper(op: AnyOperation, sel: Selection, buffer: *render.Buffer) !void {
+    pub fn generateHelper(op: AnyOperation, sel: Selection, gen: anytype) !void {
         return switch (op) {
-            inline else => |comptime_op| comptime_op.drawHelper(sel, buffer),
+            inline else => |comptime_op| comptime_op.generateHelper(sel, gen),
         };
     }
 };
@@ -78,8 +78,9 @@ pub const AddPoint = struct {
         return out;
     }
 
-    pub fn drawHelper(op: AddPoint, _: Selection, buffer: *render.Buffer) !void {
-        try state.wideStroke().drawPoint(op.position.val, helper_color, buffer);
+    pub fn generateHelper(op: AddPoint, _: Selection, gen: anytype) !void {
+        var pass = state.wideStroke().generator(gen).begin();
+        try pass.end(op.position.val, null);
     }
 };
 
@@ -130,16 +131,17 @@ pub const Append = struct {
         return out;
     }
 
-    pub fn drawHelper(op: Append, sel: Selection, buffer: *render.Buffer) !void {
+    pub fn generateHelper(op: Append, sel: Selection, gen: anytype) !void {
         const index = sel.intervals.items(.index)[0];
         const interval = sel.intervals.items(.interval)[0];
-        try state.standardStroke().drawArc(.{
+
+        try geometry.Arc.generate(.{
             .pos_a = sel.drawing.getPath(index).positions[interval.a],
             .pos_b = if (snapping.snapToLooseEnd(sel.drawing, op.position.val)) |res|
                 sel.drawing.getPositions(res.index)[res.node]
             else
                 op.position.val,
-        }, helper_color, buffer);
+        }, state.standardStroke().generator(gen));
     }
 };
 
@@ -191,10 +193,10 @@ pub const Connect = struct {
         return out;
     }
 
-    pub fn drawHelper(op: Connect, sel: Selection, buffer: *render.Buffer) !void {
+    pub fn generateHelper(op: Connect, sel: Selection, gen: anytype) !void {
         _ = op;
         _ = sel;
-        _ = buffer;
+        _ = gen;
         // TODO
     }
 };
@@ -218,19 +220,19 @@ pub const Move = struct {
         try op.offset.onEvent(event);
     }
 
-    fn transform(pos: geometry.Vec2, offset: geometry.Vec2) geometry.Vec2 {
-        return pos + offset;
+    fn getMat(op: Move) geometry.Mat3 {
+        return mat3.translate(op.offset.val);
     }
 
     pub fn apply(op: Move, sel: Selection) !Selection {
         var out = try sel.clone();
-        out.apply(op.offset.val, transform);
+        out.transformSelected(op.getMat());
         return out;
     }
 
-    pub fn drawHelper(op: Move, sel: Selection, buffer: *render.Buffer) !void {
-        try sel.drawApply(op.offset.val, transform, state.wideStroke(), helper_color, buffer);
-        try sel.drawApplyEdges(op.offset.val, transform, state.standardStroke(), helper_color, buffer);
+    pub fn generateHelper(op: Move, sel: Selection, gen: anytype) !void {
+        try sel.generateSelected(generators.transformGenerator(op.getMat(), state.wideStroke().generator(gen)));
+        try sel.generateTransformEdges(op.getMat(), state.standardStroke().generator(gen));
     }
 };
 
@@ -306,9 +308,9 @@ pub const Delete = struct {
             try out_drawing.appendPoint(new_index, path.positions[path.next(i)], path.angles[i]);
     }
 
-    pub fn drawHelper(_: Delete, sel: Selection, buffer: *render.Buffer) !void {
+    pub fn generateHelper(_: Delete, sel: Selection, gen: anytype) !void {
         _ = sel;
-        _ = buffer;
+        _ = gen;
         // TODO
     }
 };
@@ -342,11 +344,11 @@ pub const ChangeAngle = struct {
         return out;
     }
 
-    pub fn drawHelper(op: ChangeAngle, sel: Selection, buffer: *render.Buffer) !void {
+    pub fn generateHelper(op: ChangeAngle, sel: Selection, gen: anytype) !void {
         const path = sel.drawing.getPath(sel.intervals.items(.index)[0]);
         const interval = sel.intervals.items(.interval)[0];
         var arc = path.getArc(interval.a);
         arc.angle = op.angle.val;
-        try state.standardStroke().drawArc(arc, helper_color, buffer);
+        try arc.generate(state.standardStroke().generator(gen));
     }
 };

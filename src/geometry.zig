@@ -2,14 +2,21 @@ const std = @import("std");
 const render = @import("render.zig");
 const vec2 = @import("linalg.zig").vec(2, f32);
 const mat2 = @import("linalg.zig").mat(2, f32);
+const mat3 = @import("linalg.zig").mat(3, f32);
 
 pub const Vec2 = vec2.Vector;
+pub const Mat3 = mat3.Matrix;
 
 pub fn normal(vec: Vec2) Vec2 {
     return .{ -vec[1], vec[0] };
 }
 pub fn rotate(vec: Vec2, angle: f32) Vec2 {
     return mat2.multVec(mat2.rotate(0, 1, angle), vec);
+}
+
+pub fn transform(mat: Mat3, vec: Vec2) Vec2 {
+    const v = mat3.multVec(mat, .{ vec[0], vec[1], 1 });
+    return vec2.Vector{ v[0], v[1] } / vec2.splat(v[2]);
 }
 
 pub const Arc = struct {
@@ -71,6 +78,12 @@ pub const Arc = struct {
         const vec_b = arc.pos_b - point_pos;
         return std.math.atan2(f32, -vec2.dot(vec_a, normal(vec_b)), -vec2.dot(vec_a, vec_b));
     }
+
+    pub fn generate(arc: Arc, gen: anytype) !void {
+        var pass = gen.begin();
+        try pass.add(arc.pos_a, arc.angle);
+        try pass.end(arc.pos_b, null);
+    }
 };
 
 pub const Path = struct {
@@ -113,147 +126,31 @@ pub const Path = struct {
         }
         return inside;
     }
+
+    pub fn generate(path: Path, gen: anytype) !void {
+        var pass = gen.begin();
+        var i: usize = 0;
+        while (i + 1 < path.len()) : (i += 1)
+            try pass.add(path.positions[i], path.angles[i]);
+        try pass.end(path.positions[i], if (path.isLooped()) path.angles[i] else null);
+    }
 };
 
 pub const Circle = struct {
     pos: Vec2,
     radius: f32,
 
-    pub fn draw(circle: Circle, color: render.Color, buffer: *render.Buffer) !void {
-        try buffer.append(.{
-            .positions = &.{ circle.pos + Vec2{ -circle.radius, 0 }, circle.pos + Vec2{ circle.radius, 0 } },
-            .angles = &.{ std.math.pi / 2.0, std.math.pi / 2.0 },
-        }, color);
+    pub fn generate(circle: Circle, gen: anytype) !void {
+        var pass = gen.begin();
+        try pass.add(circle.pos + Vec2{ -circle.radius, 0 }, std.math.pi / 2.0);
+        try pass.end(circle.pos + Vec2{ circle.radius, 0 }, std.math.pi / 2.0);
     }
 };
 
-pub const Stroke = struct {
-    width: f32,
-    cap: CapStyle,
+// pub const Square = struct {
+//     pos: Vec2,
+//     radius: Vec2,
 
-    pub const CapStyle = enum {
-        none,
-        round,
-        bevel,
-        miter,
-    };
-
-    fn drawCap(stroke: Stroke, pos: Vec2, dir_a: Vec2, dir_b: Vec2, color: render.Color, buffer: *render.Buffer) !void {
-        const ndir_a = -vec2.normalize(dir_a);
-        const ndir_b = -vec2.normalize(dir_b);
-
-        const dot = vec2.dot(ndir_a, ndir_b);
-        if (dot == -1) return; // directions are opposite, no cap is needed
-
-        const sdir = (if (dot == 1) ndir_a else vec2.normalize(ndir_a + ndir_b)) * vec2.splat(stroke.width);
-        const sdir_a = ndir_a * vec2.splat(stroke.width);
-        const sdir_b = ndir_b * vec2.splat(stroke.width);
-
-        const side = vec2.dot(normal(ndir_a), ndir_b) < 0;
-        const normal_a = if (side) -normal(sdir_a) else normal(sdir_a);
-        const normal_b = if (side) normal(sdir_b) else -normal(sdir_b);
-
-        switch (stroke.cap) {
-            .none => {},
-            .round => {
-                try buffer.appendPath(.{
-                    .positions = &.{ pos, pos + normal_a, pos + normal_b },
-                    .angles = &.{ 0, Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, sdir), 0 },
-                }, color);
-            },
-            .bevel => {
-                try buffer.appendPath(.{
-                    .positions = &.{ pos, pos + normal_a, pos + normal_b },
-                    .angles = &.{ 0, 0, 0 },
-                }, color);
-            },
-            .miter => {
-                const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (sdir[0] * dir_a[1] - sdir[1] * dir_a[0]);
-                if (tip_dist > 0 and tip_dist < 8) {
-                    try buffer.appendPath(.{
-                        .positions = &.{ pos, pos + normal_a, pos + sdir * vec2.splat(tip_dist), pos + normal_b },
-                        .angles = &.{ 0, 0, 0, 0 },
-                    }, color);
-                } else {
-                    try buffer.appendPath(.{
-                        .positions = &.{ pos, pos + normal_a, pos + normal_a + sdir_a, pos + normal_b + sdir_b, pos + normal_b },
-                        .angles = &.{ 0, 0, 0, 0, 0 },
-                    }, color);
-                }
-            },
-        }
-    }
-
-    fn drawSegment(stroke: Stroke, arc: Arc, color: render.Color, buffer: *render.Buffer) !void {
-        const normal_a = vec2.normalize(normal(arc.dirA())) * vec2.splat(stroke.width);
-        const normal_b = vec2.normalize(normal(arc.dirB())) * vec2.splat(stroke.width);
-
-        try buffer.appendPath(.{
-            .positions = &.{ arc.pos_a + normal_a, arc.pos_b - normal_b, arc.pos_b + normal_b, arc.pos_a - normal_a },
-            .angles = &.{ arc.angle, 0, -arc.angle, 0 },
-        }, color);
-    }
-
-    pub const Generator = struct {
-        stroke: Stroke,
-        color: render.Color,
-        buffer: *render.Buffer,
-        last_pos: Vec2,
-        last_dir: Vec2 = .{ -1, 0 },
-        first_pos: Vec2,
-        first_dir: Vec2 = .{ 1, 0 },
-        is_first: bool = true,
-
-        pub fn add(g: *Generator, angle: f32, pos: Vec2) !void {
-            const arc = Arc{ .pos_a = g.last_pos, .pos_b = pos, .angle = angle };
-            if (g.is_first) {
-                g.first_dir = arc.dirA();
-                g.is_first = false;
-            } else {
-                try g.stroke.drawCap(g.last_pos, g.last_dir, arc.dirA(), g.color, g.buffer);
-            }
-            try g.stroke.drawSegment(arc, g.color, g.buffer);
-            g.last_pos = pos;
-            g.last_dir = arc.dirB();
-        }
-        pub fn finish(g: *Generator) !void {
-            try g.stroke.drawCap(g.first_pos, g.first_dir, g.first_dir, g.color, g.buffer);
-            try g.stroke.drawCap(g.last_pos, g.last_dir, g.last_dir, g.color, g.buffer);
-            g.* = undefined;
-        }
-        pub fn finishLoop(g: *Generator, angle: f32) !void {
-            const arc = Arc{ .pos_a = g.last_pos, .pos_b = g.first_pos, .angle = angle };
-            try g.stroke.drawCap(g.last_pos, g.last_dir, arc.dirA(), g.color, g.buffer);
-            try g.stroke.drawSegment(arc, g.color, g.buffer);
-            try g.stroke.drawCap(g.first_pos, arc.dirB(), g.first_dir, g.color, g.buffer);
-            g.* = undefined;
-        }
-    };
-    pub inline fn begin(stroke: Stroke, pos: Vec2, color: render.Color, buffer: *render.Buffer) Generator {
-        return .{ .stroke = stroke, .color = color, .buffer = buffer, .first_pos = pos, .last_pos = pos };
-    }
-
-    pub fn drawPoint(stroke: Stroke, pos: Vec2, color: render.Color, buffer: *render.Buffer) !void {
-        var generator = stroke.begin(pos, color, buffer);
-        try generator.finish();
-    }
-
-    pub fn drawArc(stroke: Stroke, arc: Arc, color: render.Color, buffer: *render.Buffer) !void {
-        var generator = stroke.begin(arc.pos_a, color, buffer);
-        try generator.add(arc.angle, arc.pos_b);
-        try generator.finish();
-    }
-
-    pub fn drawPath(stroke: Stroke, path: Path, color: render.Color, buffer: *render.Buffer) !void {
-        var generator = stroke.begin(path.positions[0], color, buffer);
-        var i: usize = 0;
-        while (i + 1 < path.len()) : (i += 1) {
-            try generator.add(path.angles[i], path.positions[i + 1]);
-        }
-        if (path.isLooped()) {
-            try generator.finishLoop(path.angles[i]);
-        } else {
-            try generator.finish();
-        }
-    }
-};
+//     pub fn generate(square: Square, gen: anytype) !void {
+//     }
+// };

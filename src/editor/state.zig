@@ -1,6 +1,7 @@
 const std = @import("std");
 const editor = @import("../editor.zig");
 const geometry = @import("../geometry.zig");
+const generators = @import("../generators.zig");
 const platform = @import("../platform.zig");
 const vec2 = @import("../linalg.zig").vec(2, f32);
 const mat3 = @import("../linalg.zig").mat(3, f32);
@@ -84,10 +85,10 @@ pub fn getTransform() mat3.Matrix {
     );
 }
 
-pub fn standardStroke() geometry.Stroke {
+pub fn standardStroke() generators.Stroke {
     return .{ .width = 2 * canvas_zoom, .cap = .round };
 }
-pub fn wideStroke() geometry.Stroke {
+pub fn wideStroke() generators.Stroke {
     return .{ .width = 4 * canvas_zoom, .cap = .round };
 }
 pub fn snapDist() f32 {

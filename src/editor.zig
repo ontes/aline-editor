@@ -10,6 +10,7 @@ const snapping = @import("editor/snapping.zig");
 const state = @import("editor/state.zig");
 
 const select_color = render.Color{ 255, 255, 64, 255 };
+const preview_color = [4]u8{ 255, 64, 64, 255 };
 
 var history: History = undefined;
 var pending_operation: ?operations.AnyOperation = null;
@@ -194,23 +195,27 @@ pub fn onEvent(event: platform.Event) !void {
         try operation.onEvent(event);
 }
 
+const text = @import("text.zig");
+const generators = @import("generators.zig");
+const mat3 = @import("linalg.zig").mat(3, f32);
+
 pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
     if (!should_redraw_main and !should_redraw_helper and !should_update_transform)
         return false;
     if (should_redraw_main) {
-        main_buffer.clearPaths();
+        main_buffer.clear();
         try history.get().drawing.draw(main_buffer);
-        main_buffer.flushPaths();
+        main_buffer.flush();
         should_redraw_main = false;
     }
     if (should_redraw_helper) {
-        helper_buffer.clearPaths();
+        helper_buffer.clear();
         if (isGrabbed()) {
-            try pending_operation.?.drawHelper(history.getPrev().*, helper_buffer);
+            try pending_operation.?.generateHelper(history.getPrev().*, helper_buffer.generator(preview_color));
         } else {
-            try history.get().drawSelected(state.wideStroke(), select_color, helper_buffer);
+            try history.get().generateSelected(state.wideStroke().generator(helper_buffer.generator(select_color)));
         }
-        helper_buffer.flushPaths();
+        helper_buffer.flush();
         should_redraw_helper = false;
     }
     if (should_update_transform) {

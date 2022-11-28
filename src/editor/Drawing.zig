@@ -1,9 +1,10 @@
 const std = @import("std");
 const render = @import("../render.zig");
 const geometry = @import("../geometry.zig");
+const generators = @import("../generators.zig");
 
 pub const Style = struct {
-    stroke: geometry.Stroke,
+    stroke: generators.Stroke,
     fill_color: render.Color,
     stroke_color: render.Color,
 
@@ -205,8 +206,12 @@ pub fn draw(drawing: Drawing, buffer: *render.Buffer) !void {
     var it = drawing.pathIterator();
     while (it.next()) |path| {
         const style = it.getStyle();
-        if (path.isLooped())
-            try buffer.appendPath(path, style.fill_color);
-        try style.stroke.drawPath(path, style.stroke_color, buffer);
+        if (path.isLooped()) {
+            var gen = buffer.generator(style.fill_color);
+            try path.generate(&gen);
+        }
+        var gen = buffer.generator(style.stroke_color);
+        var stroke_gen = style.stroke.generator(&gen);
+        try path.generate(&stroke_gen);
     }
 }

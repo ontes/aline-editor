@@ -240,89 +240,51 @@ pub fn selectAll(sel: *Selection) !void {
         try sel.selectPath(index);
 }
 
-pub fn drawSelected(sel: Selection, stroke: geometry.Stroke, color: render.Color, buffer: *render.Buffer) !void {
+pub fn generateSelected(sel: Selection, gen: anytype) !void {
     for (sel.loops.items) |index| {
-        try stroke.drawPath(sel.drawing.getPath(index), color, buffer);
+        try sel.drawing.getPath(index).generate(gen);
     }
     for (sel.intervals.items(.index)) |index, j| {
         const interval = sel.intervals.items(.interval)[j];
         const path = sel.drawing.getPath(index);
-        var generator = stroke.begin(path.positions[interval.a], color, buffer);
+        var pass = gen.begin();
         var i: u32 = interval.a;
         while (i != interval.b) : (i = path.next(i))
-            try generator.add(path.angles[i], path.positions[path.next(i)]);
-        try generator.finish();
+            try pass.add(path.positions[i], path.angles[i]);
+        try pass.end(path.positions[i], null);
     }
 }
 
-pub fn apply(
-    sel: *Selection,
-    op_arg: anytype,
-    op: fn (geometry.Vec2, @TypeOf(op_arg)) geometry.Vec2,
-) void {
+pub fn transformSelected(sel: *Selection, mat: geometry.Mat3) void {
     for (sel.loops.items) |index| {
-        for (sel.drawing.getPositions(index)) |*position|
-            position.* = op(position.*, op_arg);
+        for (sel.drawing.getPositions(index)) |*pos|
+            pos.* = geometry.transform(mat, pos.*);
     }
     for (sel.intervals.items(.index)) |index, i| {
         const interval = sel.intervals.items(.interval)[i];
         const positions = sel.drawing.getPositions(index);
         var node = interval.a;
         while (node != interval.b) : (node = (node + 1) % @intCast(u32, positions.len))
-            positions[node] = op(positions[node], op_arg);
-        positions[node] = op(positions[node], op_arg);
+            positions[node] = geometry.transform(mat, positions[node]);
+        positions[node] = geometry.transform(mat, positions[node]);
     }
 }
 
-pub fn drawApply(
-    sel: Selection,
-    op_arg: anytype,
-    op: fn (geometry.Vec2, @TypeOf(op_arg)) geometry.Vec2,
-    stroke: geometry.Stroke,
-    color: render.Color,
-    buffer: *render.Buffer,
-) !void {
-    for (sel.loops.items) |index| {
-        const path = sel.drawing.getPath(index);
-        var generator = stroke.begin(op(path.positions[0], op_arg), color, buffer);
-        var i: u32 = 0;
-        while (i + 1 < path.len()) : (i += 1)
-            try generator.add(path.angles[i], op(path.positions[i + 1], op_arg));
-        try generator.finishLoop(path.angles[i]);
-    }
-    for (sel.intervals.items(.index)) |index, j| {
-        const interval = sel.intervals.items(.interval)[j];
-        const path = sel.drawing.getPath(index);
-        var generator = stroke.begin(op(path.positions[interval.a], op_arg), color, buffer);
-        var i: u32 = interval.a;
-        while (i != interval.b) : (i = path.next(i))
-            try generator.add(path.angles[i], op(path.positions[path.next(i)], op_arg));
-        try generator.finish();
-    }
-}
-
-pub fn drawApplyEdges(
-    sel: Selection,
-    op_arg: anytype,
-    op: fn (geometry.Vec2, @TypeOf(op_arg)) geometry.Vec2,
-    stroke: geometry.Stroke,
-    color: render.Color,
-    buffer: *render.Buffer,
-) !void {
+pub fn generateTransformEdges(sel: Selection, mat: geometry.Mat3, gen: anytype) !void {
     for (sel.intervals.items(.index)) |index, j| {
         const interval = sel.intervals.items(.interval)[j];
         const path = sel.drawing.getPath(index);
         if ((path.isLooped() or interval.a > 0) and !sel.isSelectedNode(index, path.prev(interval.a))) {
             var arc = path.getArc(path.prev(interval.a));
-            arc.pos_b = op(arc.pos_b, op_arg);
-            try stroke.drawArc(arc, color, buffer);
+            arc.pos_b = geometry.transform(mat, arc.pos_b);
+            try arc.generate(gen);
         }
         if (path.isLooped() or interval.b < path.len() - 1) {
             var arc = path.getArc(interval.b);
-            arc.pos_a = op(arc.pos_a, op_arg);
+            arc.pos_a = geometry.transform(mat, arc.pos_a);
             if (sel.isSelectedNode(index, path.next(interval.b)))
-                arc.pos_b = op(arc.pos_b, op_arg);
-            try stroke.drawArc(arc, color, buffer);
+                arc.pos_b = geometry.transform(mat, arc.pos_b);
+            try arc.generate(gen);
         }
     }
 }
