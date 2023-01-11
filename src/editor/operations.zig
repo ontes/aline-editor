@@ -14,8 +14,8 @@ const state = @import("state.zig");
 
 const default_style = Drawing.Style{
     .stroke = .{ .width = 2, .cap = .round },
-    .fill_color = .{ 64, 64, 64, 255 },
-    .stroke_color = .{ 255, 255, 255, 255 },
+    .fill_color = .{ 128, 255, 128, 255 },
+    .stroke_color = .{ 0, 0, 0, 255 },
 };
 
 pub const AnyOperation = union(enum) {
@@ -23,7 +23,7 @@ pub const AnyOperation = union(enum) {
     Append: Append,
     Connect: Connect,
     Move: Move,
-    Delete: Delete,
+    Remove: Remove,
     ChangeAngle: ChangeAngle,
 
     pub fn isGrabbed(op: AnyOperation) bool {
@@ -236,22 +236,22 @@ pub const Move = struct {
     }
 };
 
-pub const Delete = struct {
-    pub fn init(sel: Selection) ?Delete {
+pub const Remove = struct {
+    pub fn init(sel: Selection) ?Remove {
         if (sel.isNothingSelected()) return null;
         return .{};
     }
 
-    pub fn isGrabbed(_: Delete) bool {
+    pub fn isGrabbed(_: Remove) bool {
         return false; // TODO
     }
 
-    pub fn onEvent(_: *Delete, event: platform.Event) !void {
+    pub fn onEvent(_: *Remove, event: platform.Event) !void {
         _ = event;
         // TODO
     }
 
-    pub fn apply(_: Delete, sel: Selection) !Selection {
+    pub fn apply(_: Remove, sel: Selection) !Selection {
         var out = Selection.init(sel.drawing.allocator);
         var it = sel.drawing.pathIterator();
         while (it.next()) |path| {
@@ -308,7 +308,7 @@ pub const Delete = struct {
             try out_drawing.appendPoint(new_index, path.positions[path.next(i)], path.angles[i]);
     }
 
-    pub fn generateHelper(_: Delete, sel: Selection, gen: anytype) !void {
+    pub fn generateHelper(_: Remove, sel: Selection, gen: anytype) !void {
         _ = sel;
         _ = gen;
         // TODO

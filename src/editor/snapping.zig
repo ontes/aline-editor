@@ -1,14 +1,20 @@
 const std = @import("std");
 const geometry = @import("../geometry.zig");
-const vec2 = @import("../linalg.zig").vec(2, f32);
 const state = @import("state.zig");
 const Drawing = @import("Drawing.zig");
 
-pub fn distToPoint(pos_a: geometry.Vec2, pos_b: geometry.Vec2) f32 {
-    return vec2.abs(pos_a - pos_b);
+fn distToPoint(pos: geometry.Vec2, point: geometry.Vec2) f32 {
+    return geometry.vec2.abs(pos - point);
 }
-pub fn distToArc(arc: geometry.Arc, pos: geometry.Vec2) f32 {
-    return vec2.abs(arc.pos_a - arc.pos_b) * @fabs(@tan(arc.angleOnPoint(pos) / 2) - @tan(arc.angle / 2)) / 2;
+pub fn shouldSnapToPoint(pos: geometry.Vec2, point: geometry.Vec2) bool {
+    return distToPoint(pos, point) < state.snapDist();
+}
+
+fn distToArc(pos: geometry.Vec2, arc: geometry.Arc) f32 {
+    return geometry.vec2.abs(arc.pos_a - arc.pos_b) * @fabs(@tan(arc.angleOnPoint(pos) / 2) - @tan(arc.angle / 2)) / 2;
+}
+pub fn shouldSnapToArc(pos: geometry.Vec2, arc: geometry.Arc) bool {
+    return distToArc(pos, arc) < state.snapDist();
 }
 
 const SelectResult = struct {
@@ -26,7 +32,7 @@ pub fn select(drawing: Drawing, pos: geometry.Vec2) ?SelectResult {
     while (it.next()) |path| {
         var node: u32 = 0;
         while (node < path.len()) : (node += 1) {
-            const dist = distToPoint(path.positions[node], pos);
+            const dist = distToPoint(pos, path.positions[node]);
             if (dist < best_dist) {
                 best_dist = dist;
                 result = .{ .index = it.getIndex(), .val = .{ .node = node } };
@@ -34,7 +40,7 @@ pub fn select(drawing: Drawing, pos: geometry.Vec2) ?SelectResult {
         }
         var segment: u32 = 0;
         while (segment < path.angles.len) : (segment += 1) {
-            const dist = distToArc(path.getArc(segment), pos);
+            const dist = distToArc(pos, path.getArc(segment));
             if (dist < best_dist) {
                 best_dist = dist;
                 result = .{ .index = it.getIndex(), .val = .{ .segment = segment } };
@@ -58,7 +64,7 @@ pub fn snapToLooseEnd(drawing: Drawing, pos: geometry.Vec2) ?LooseEndResult {
     while (it.next()) |path| {
         if (!path.isLooped()) {
             for ([_]u32{ 0, path.len() - 1 }) |node| {
-                const dist = distToPoint(path.positions[node], pos);
+                const dist = distToPoint(pos, path.positions[node]);
                 if (dist < best_dist) {
                     best_dist = dist;
                     result = .{ .index = it.getIndex(), .node = node };

@@ -16,6 +16,8 @@ var history: History = undefined;
 var pending_operation: ?operations.AnyOperation = null;
 
 const live_preview = true;
+
+var should_redraw_canvas = true;
 var should_redraw_main = true;
 var should_redraw_helper = true;
 var should_update_transform = true;
@@ -118,8 +120,8 @@ pub fn onEvent(event: platform.Event) !void {
                     history.get().deselectAll();
 
                 const mouse_pos = state.mouseCanvasPos();
-                if (snapping.distToPoint(mouse_pos, mouse_click_pos.?) < state.snapDist()) {
-                    try selectPoint(mouse_pos);
+                if (snapping.shouldSnapToPoint(mouse_pos, mouse_click_pos.?)) {
+                    try selectPoint(mouse_click_pos.?);
                 } else {
                     try selectRect(@min(mouse_pos, mouse_click_pos.?), @max(mouse_pos, mouse_click_pos.?));
                 }
@@ -169,8 +171,8 @@ pub fn onEvent(event: platform.Event) !void {
             },
             .delete => {
                 try finishOperation();
-                if (operations.Delete.init(history.get().*)) |op|
-                    try setOperation(.{ .Delete = op });
+                if (operations.Remove.init(history.get().*)) |op|
+                    try setOperation(.{ .Remove = op });
             },
             else => {},
         },
@@ -195,19 +197,28 @@ pub fn onEvent(event: platform.Event) !void {
         try operation.onEvent(event);
 }
 
-const text = @import("text.zig");
-const generators = @import("generators.zig");
-const mat3 = @import("linalg.zig").mat(3, f32);
-
-pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
-    if (!should_redraw_main and !should_redraw_helper and !should_update_transform)
+pub fn redraw(
+    canvas_buffer: *render.Buffer,
+    main_buffer: *render.Buffer,
+    helper_buffer: *render.Buffer,
+) !bool {
+    if (!should_redraw_canvas and !should_redraw_main and !should_redraw_helper and !should_update_transform)
         return false;
+
+    if (should_redraw_canvas) {
+        canvas_buffer.clear();
+        try drawCanvas(canvas_buffer);
+        canvas_buffer.flush();
+        should_redraw_canvas = false;
+    }
+
     if (should_redraw_main) {
         main_buffer.clear();
         try history.get().drawing.draw(main_buffer);
         main_buffer.flush();
         should_redraw_main = false;
     }
+
     if (should_redraw_helper) {
         helper_buffer.clear();
         if (isGrabbed()) {
@@ -218,11 +229,24 @@ pub fn draw(main_buffer: *render.Buffer, helper_buffer: *render.Buffer) !bool {
         helper_buffer.flush();
         should_redraw_helper = false;
     }
+
     if (should_update_transform) {
-        const transform = state.getTransform();
-        main_buffer.setTransform(transform);
-        helper_buffer.setTransform(transform);
+        main_buffer.setTransform(state.canvasTransform());
+        helper_buffer.setTransform(state.canvasTransform());
+        canvas_buffer.setTransform(state.canvasTransform());
         should_update_transform = false;
     }
     return true;
+}
+
+const canvas_size = geometry.Vec2{ 512, 512 };
+const canvas_corner_radius: f32 = 16;
+
+pub fn drawCanvas(buffer: *render.Buffer) !void {
+    const rect = geometry.RoundedRect{
+        .pos = .{ 0, 0 },
+        .radius = canvas_size / geometry.vec2.splat(2),
+        .corner_radius = canvas_corner_radius,
+    };
+    try rect.generate(buffer.generator(.{ 255, 255, 255, 255 }));
 }

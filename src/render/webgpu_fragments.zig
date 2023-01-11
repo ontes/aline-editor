@@ -159,7 +159,7 @@ pub const Context = struct {
                 .view = context.swapchain.getCurrentTextureView(),
                 .load_op = .clear,
                 .store_op = .store,
-                .clear_value = std.mem.zeroes(webgpu.Color),
+                .clear_value = .{ .r = 0.9, .g = 0.9, .b = 0.9, .a = 1 },
             }},
         });
         pass.setPipeline(context.pipeline);

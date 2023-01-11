@@ -3,18 +3,16 @@ const editor = @import("../editor.zig");
 const geometry = @import("../geometry.zig");
 const generators = @import("../generators.zig");
 const platform = @import("../platform.zig");
-const vec2 = @import("../linalg.zig").vec(2, f32);
-const mat3 = @import("../linalg.zig").mat(3, f32);
 
 var window_size: [2]u32 = .{ 0, 0 };
 var mouse_pos: [2]i32 = .{ 0, 0 };
-var prev_mouse_pos: [2]i32 = .{ 0, 0 };
 
 var mouse_middle_pressed: bool = false;
 var ctrl_pressed: bool = false;
 var shift_pressed: bool = false;
 var alt_pressed: bool = false;
 
+var prev_mouse_canvas_pos: geometry.Vec2 = .{ 0, 0 };
 pub var canvas_pan: geometry.Vec2 = .{ 0, 0 };
 pub var canvas_zoom: f32 = 1;
 
@@ -32,37 +30,28 @@ pub fn onEvent(event: platform.Event) void {
         },
         .window_resize => |size| window_size = size,
         .mouse_move => |pos| {
-            prev_mouse_pos = mouse_pos;
+            prev_mouse_canvas_pos = mouseCanvasPos();
             mouse_pos = pos;
         },
         else => {},
     }
 }
 
-fn windowPosToCanvasPos(pos: [2]i32) geometry.Vec2 {
-    return canvas_pan + vec2.splat(canvas_zoom) * geometry.Vec2{
-        @intToFloat(f32, pos[0]) - @intToFloat(f32, window_size[0]) / 2,
-        @intToFloat(f32, window_size[1]) / 2 - @intToFloat(f32, pos[1]),
+pub fn mousePos() geometry.Vec2 {
+    return .{
+        @intToFloat(f32, mouse_pos[0]) - @intToFloat(f32, window_size[0]) / 2,
+        @intToFloat(f32, window_size[1]) / 2 - @intToFloat(f32, mouse_pos[1]),
     };
 }
-
-fn windowPosToRelWinPos(pos: [2]i32) geometry.Vec2 {
-    return .{
-        @intToFloat(f32, pos[0]) / @intToFloat(f32, window_size[0]),
-        @intToFloat(f32, pos[1]) / @intToFloat(f32, window_size[1]),
-    };
+pub fn windowSize() geometry.Vec2 {
+    return .{ @intToFloat(f32, window_size[0]), @intToFloat(f32, window_size[1]) };
 }
 
 pub fn mouseCanvasPos() geometry.Vec2 {
-    return windowPosToCanvasPos(mouse_pos);
+    return canvas_pan + geometry.vec2.splat(canvas_zoom) * mousePos();
 }
-
 pub fn mouseCanvasOffset() geometry.Vec2 {
-    return windowPosToCanvasPos(mouse_pos) - windowPosToCanvasPos(prev_mouse_pos);
-}
-
-pub fn mouseRelWinPos() geometry.Vec2 {
-    return windowPosToRelWinPos(mouse_pos);
+    return mouseCanvasPos() - prev_mouse_canvas_pos;
 }
 
 pub fn isCtrlPressed() bool {
@@ -78,11 +67,14 @@ pub fn isMouseMiddlePressed() bool {
     return mouse_middle_pressed;
 }
 
-pub fn getTransform() mat3.Matrix {
-    return mat3.mult(
-        mat3.scale(.{ 2 / canvas_zoom / @intToFloat(f32, window_size[0]), 2 / canvas_zoom / @intToFloat(f32, window_size[1]), 1 }),
-        mat3.translate(-canvas_pan),
-    );
+pub fn canvasTransform() geometry.Mat3 {
+    const scale = geometry.vec2.splat(2 / canvas_zoom) / windowSize();
+    return geometry.mat3.mult(geometry.mat3.scale(.{ scale[0], scale[1], 1 }), geometry.mat3.translate(-canvas_pan));
+}
+
+pub fn standardTransform() geometry.Mat3 {
+    const scale = geometry.vec2.splat(2) / windowSize();
+    return geometry.mat3.scale(.{ scale[0], scale[1], 1 });
 }
 
 pub fn standardStroke() generators.Stroke {

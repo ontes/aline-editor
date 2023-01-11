@@ -206,12 +206,8 @@ pub fn draw(drawing: Drawing, buffer: *render.Buffer) !void {
     var it = drawing.pathIterator();
     while (it.next()) |path| {
         const style = it.getStyle();
-        if (path.isLooped()) {
-            var gen = buffer.generator(style.fill_color);
-            try path.generate(&gen);
-        }
-        var gen = buffer.generator(style.stroke_color);
-        var stroke_gen = style.stroke.generator(&gen);
-        try path.generate(&stroke_gen);
+        if (path.isLooped())
+            try path.generate(buffer.generator(style.fill_color));
+        try path.generate(style.stroke.generator(buffer.generator(style.stroke_color)));
     }
 }

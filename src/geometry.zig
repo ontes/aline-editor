@@ -1,9 +1,9 @@
 const std = @import("std");
 const render = @import("render.zig");
-const vec2 = @import("linalg.zig").vec(2, f32);
-const mat2 = @import("linalg.zig").mat(2, f32);
-const mat3 = @import("linalg.zig").mat(3, f32);
 
+pub const vec2 = @import("linalg.zig").vec(2, f32);
+pub const mat2 = @import("linalg.zig").mat(2, f32);
+pub const mat3 = @import("linalg.zig").mat(3, f32);
 pub const Vec2 = vec2.Vector;
 pub const Mat3 = mat3.Matrix;
 
@@ -157,6 +157,11 @@ pub const Rect = struct {
         try pass.add(rect.pos + Vec2{ rect.radius[0], -rect.radius[1] }, 0);
         try pass.add(rect.pos + Vec2{ -rect.radius[0], -rect.radius[1] }, 0);
         try pass.end(rect.pos + Vec2{ -rect.radius[0], rect.radius[1] }, 0);
+    }
+
+    pub fn containsPoint(rect: Rect, point: Vec2) bool {
+        return @reduce(.And, point >= rect.pos - rect.radius) and
+            @reduce(.And, point <= rect.pos + rect.radius);
     }
 };
 

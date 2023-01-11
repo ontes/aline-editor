@@ -118,7 +118,7 @@ pub const Angle = struct {
     }
 
     pub fn beginGrab(prop: *Angle) void {
-        prop.grab = .{ .old_val = prop.val, .prev_mouse_pos = -state.mouseRelWinPos()[1] };
+        prop.grab = .{ .old_val = prop.val, .prev_mouse_pos = state.mousePos()[1] / state.windowSize()[1] };
     }
 
     pub fn finishGrab(prop: *Angle) void {
@@ -134,7 +134,7 @@ pub const Angle = struct {
         if (prop.grab) |*grab| {
             switch (event) {
                 .mouse_move => {
-                    const mouse_pos = -state.mouseRelWinPos()[1];
+                    const mouse_pos = state.mousePos()[1] / state.windowSize()[1];
                     const multiplier: f32 = if (state.isShiftPressed()) 0.1 else 1;
                     prop.val = 2 * std.math.atan(@tan(prop.val / 2) + (mouse_pos - grab.prev_mouse_pos) * 5 * multiplier);
                     grab.prev_mouse_pos = mouse_pos;
