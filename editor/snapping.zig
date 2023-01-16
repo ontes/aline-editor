@@ -1,20 +1,21 @@
 const std = @import("std");
-const geometry = @import("../geometry.zig");
-const state = @import("state.zig");
+const math = @import("math");
+
+const input = @import("input.zig");
 const Drawing = @import("Drawing.zig");
 
-fn distToPoint(pos: geometry.Vec2, point: geometry.Vec2) f32 {
-    return geometry.vec2.abs(pos - point);
+fn distToPoint(pos: math.Vec2, point: math.Vec2) f32 {
+    return math.vec2.abs(pos - point);
 }
-pub fn shouldSnapToPoint(pos: geometry.Vec2, point: geometry.Vec2) bool {
-    return distToPoint(pos, point) < state.snapDist();
+pub fn shouldSnapToPoint(pos: math.Vec2, point: math.Vec2) bool {
+    return distToPoint(pos, point) < input.snapDist();
 }
 
-fn distToArc(pos: geometry.Vec2, arc: geometry.Arc) f32 {
-    return geometry.vec2.abs(arc.pos_a - arc.pos_b) * @fabs(@tan(arc.angleOnPoint(pos) / 2) - @tan(arc.angle / 2)) / 2;
+fn distToArc(pos: math.Vec2, arc: math.Arc) f32 {
+    return math.vec2.abs(arc.pos_a - arc.pos_b) * @fabs(@tan(arc.angleOnPoint(pos) / 2) - @tan(arc.angle / 2)) / 2;
 }
-pub fn shouldSnapToArc(pos: geometry.Vec2, arc: geometry.Arc) bool {
-    return distToArc(pos, arc) < state.snapDist();
+pub fn shouldSnapToArc(pos: math.Vec2, arc: math.Arc) bool {
+    return distToArc(pos, arc) < input.snapDist();
 }
 
 const SelectResult = struct {
@@ -25,9 +26,9 @@ const SelectResult = struct {
         loop: void,
     },
 };
-pub fn select(drawing: Drawing, pos: geometry.Vec2) ?SelectResult {
+pub fn select(drawing: Drawing, pos: math.Vec2) ?SelectResult {
     var result: ?SelectResult = null;
-    var best_dist: f32 = state.snapDist();
+    var best_dist: f32 = input.snapDist();
     var it = drawing.reversePathIterator();
     while (it.next()) |path| {
         var node: u32 = 0;
@@ -57,9 +58,9 @@ const LooseEndResult = struct {
     index: u32,
     node: u32,
 };
-pub fn snapToLooseEnd(drawing: Drawing, pos: geometry.Vec2) ?LooseEndResult {
+pub fn snapToLooseEnd(drawing: Drawing, pos: math.Vec2) ?LooseEndResult {
     var result: ?LooseEndResult = null;
-    var best_dist: f32 = state.snapDist();
+    var best_dist: f32 = input.snapDist();
     var it = drawing.pathIterator();
     while (it.next()) |path| {
         if (!path.isLooped()) {

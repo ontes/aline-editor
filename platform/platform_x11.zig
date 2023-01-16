@@ -1,15 +1,13 @@
 const std = @import("std");
-const platform = @import("../platform.zig");
-const x11 = @import("../bindings/x11.zig");
-const glx = @import("../bindings/glx.zig");
+const common = @import("common.zig");
+const x11 = @import("bindings/x11.zig");
+const glx = @import("bindings/glx.zig");
 
-const err = error.PlatformError;
-
-pub var display: x11.Display = undefined;
+pub var display: *x11.Display = undefined;
 
 pub fn init() !void {
-    if (x11.initThreads() == .err) return err;
-    display = x11.openDisplay(null) orelse return err;
+    if (x11.initThreads() == .err) return common.err;
+    display = x11.openDisplay(null) orelse return common.err;
 }
 
 pub fn deinit() void {
@@ -41,7 +39,7 @@ pub const Window = struct {
         // set up window close event
         if (x11.setWMProtocols(display, x11_window, &[1]x11.Atom{
             x11.internAtom(display, "WM_DELETE_WINDOW", .true),
-        }, 1) == .err) return err;
+        }, 1) == .err) return common.err;
 
         return Window{ .x11 = x11_window };
     }
@@ -68,7 +66,7 @@ pub const Window = struct {
     pub fn getSize(window: Window) ![2]u32 {
         var attribs: x11.WindowAttributes = undefined;
         if (x11.getWindowAttributes(display, window.x11, &attribs) == .err)
-            return err;
+            return common.err;
         return .{ @intCast(u32, attribs.width), @intCast(u32, attribs.height) };
     }
 
@@ -121,7 +119,7 @@ pub const Window = struct {
     // }
 };
 
-pub fn pollEvents(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
+pub fn pollEvents(comptime callback: fn (event: common.Event, window: Window) anyerror!void) !void {
     while (x11.pending(display) > 0) {
         var event: x11.Event = undefined;
         x11.nextEvent(display, &event);
@@ -202,7 +200,7 @@ pub fn pollEvents(comptime callback: fn (event: platform.Event, window: Window) 
     }
 }
 
-fn buttonToKey(button: c_uint) ?platform.Key {
+fn buttonToKey(button: c_uint) ?common.Key {
     return switch (button) {
         1 => .mouse_left,
         2 => .mouse_middle,
@@ -213,7 +211,7 @@ fn buttonToKey(button: c_uint) ?platform.Key {
     };
 }
 
-fn keysymToKey(keysym: c_ulong) ?platform.Key {
+fn keysymToKey(keysym: c_ulong) ?common.Key {
     return switch (keysym) {
         0x0061 => .a,
         0x0062 => .b,
@@ -241,16 +239,16 @@ fn keysymToKey(keysym: c_ulong) ?platform.Key {
         0x0078 => .x,
         0x0079 => .y,
         0x007a => .z,
-        0x0030 => .n0,
-        0x0031 => .n1,
-        0x0032 => .n2,
-        0x0033 => .n3,
-        0x0034 => .n4,
-        0x0035 => .n5,
-        0x0036 => .n6,
-        0x0037 => .n7,
-        0x0038 => .n8,
-        0x0039 => .n9,
+        0x0030 => .n_0,
+        0x0031 => .n_1,
+        0x0032 => .n_2,
+        0x0033 => .n_3,
+        0x0034 => .n_4,
+        0x0035 => .n_5,
+        0x0036 => .n_6,
+        0x0037 => .n_7,
+        0x0038 => .n_8,
+        0x0039 => .n_9,
         0xff0d => .enter,
         0xff1b => .escape,
         0xff08 => .backspace,
@@ -344,11 +342,11 @@ pub fn createGlContext(window: Window, color_size: u8, alpha_size: u8, depth_siz
 
     var fb_count: c_int = 0;
     const fb_configs = glx.chooseFBConfig(display, x11.defaultScreen(display), &fb_attribs, &fb_count);
-    if (fb_count == 0) return err;
+    if (fb_count == 0) return common.err;
     const fb_config = fb_configs[0];
     x11.free(@ptrCast(*anyopaque, fb_configs));
 
-    const glx_context = glx.createNewContext(display, fb_config, .rgba_type, null, .true) orelse return err;
+    const glx_context = glx.createNewContext(display, fb_config, .rgba_type, null, .true) orelse return common.err;
 
     return .{ .window = window, .glx = glx_context };
 }
@@ -363,7 +361,7 @@ pub const GlContext = struct {
 
     pub fn makeCurrent(context: GlContext) !void {
         if (glx.makeCurrent(display, context.window.x11, context.glx) == .false)
-            return err;
+            return common.err;
     }
 
     pub fn swapBuffers(context: GlContext) void {

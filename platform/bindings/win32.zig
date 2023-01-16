@@ -1,14 +1,14 @@
 const std = @import("std");
-const user = std.os.windows.user32;
 
-pub const Window = *opaque {};
-pub const Module = *opaque {};
-pub const Instance = *opaque {};
-pub const Icon = *opaque {};
-pub const Cursor = *opaque {};
-pub const Brush = *opaque {};
-pub const Menu = u32;
 pub const Atom = u16;
+
+pub const Window = opaque {}; // HWND
+pub const Module = opaque {}; // HMODULE
+pub const Instance = opaque {}; // HINSTANCE
+pub const Icon = opaque {}; // HICON
+pub const Cursor = opaque {}; // HCURSOR
+pub const Brush = opaque {}; // HBRUSH
+pub const Menu = opaque {}; // HMENU
 
 // pub const ULONG = u32;
 // pub const ULONG_PTR = usize;
@@ -292,13 +292,13 @@ pub const WindowClassEx = extern struct {
     window_proc: *const WindowProc,
     class_extra: i32 = 0,
     window_extra: i32 = 0,
-    instance: Instance,
-    icon: ?Icon,
-    cursor: ?Cursor,
-    background_brush: ?Brush,
+    instance: *Instance,
+    icon: ?*Icon,
+    cursor: ?*Cursor,
+    background_brush: ?*Brush,
     menu_name: ?[*:0]const u8,
     class_name: [*:0]const u8,
-    icon_small: ?Icon,
+    icon_small: ?*Icon,
 };
 
 pub const WindowStyle = packed struct {
@@ -402,7 +402,7 @@ pub const ShowWindowCommand = enum(c_int) {
 };
 
 pub const Message = extern struct {
-    window: ?Window,
+    window: ?*Window,
     message_type: MessageType,
     w_param: usize,
     l_param: isize,
@@ -423,30 +423,29 @@ pub const Rect = extern struct {
     bottom: i32,
 };
 
-pub const WindowProc = fn (window: Window, message_type: MessageType, w_param: usize, l_param: isize) callconv(.C) isize;
+pub const WindowProc = fn (window: *Window, message_type: MessageType, w_param: usize, l_param: isize) callconv(.C) isize;
 
+extern fn CreateWindowExA(ex_style: WindowStyleEx, class_name: [*:0]const u8, window_name: [*:0]const u8, style: WindowStyle, x: c_int, y: c_int, width: c_int, height: c_int, window_parent: ?*Window, menu: *Menu, instance: *Instance, userdata: ?*anyopaque) ?*Window;
 pub const createWindowEx = CreateWindowExA;
+extern fn DestroyWindow(window: *Window) Status;
 pub const destroyWindow = DestroyWindow;
+extern fn ShowWindow(window: *Window, cmd_show: ShowWindowCommand) Bool;
 pub const showWindow = ShowWindow;
+extern fn GetModuleHandleA(module_name: ?[*:0]const u8) ?*Module;
 pub const getModuleHandle = GetModuleHandleA;
-pub const registerClassEx = RegisterClassExA;
-pub const unregisterClass = UnregisterClassA;
-pub const peekMessage = PeekMessageA;
-pub const translateMessage = TranslateMessage;
-pub const dispatchMessage = DispatchMessageA;
-pub const defWindowProc = DefWindowProcA;
-pub const getWindowRect = GetWindowRect;
-pub const getLastError = GetLastError;
-
-extern fn CreateWindowExA(ex_style: WindowStyleEx, class_name: [*:0]const u8, window_name: [*:0]const u8, style: WindowStyle, x: c_int, y: c_int, width: c_int, height: c_int, window_parent: ?Window, menu: Menu, instance: Instance, userdata: ?*anyopaque) ?Window;
-extern fn DestroyWindow(window: Window) Status;
-extern fn ShowWindow(window: Window, cmd_show: ShowWindowCommand) Bool;
-extern fn GetModuleHandleA(module_name: ?[*:0]const u8) ?Module;
 extern fn RegisterClassExA(*const WindowClassEx) Atom;
-extern fn UnregisterClassA(class_name: [*:0]const u8, hInstance: Instance) Status;
-extern fn PeekMessageA(message: *Message, window: ?Window, msg_filter_min: c_uint, msg_filter_max: c_uint, remove_msg: PeekMessageOptions) Bool;
+pub const registerClassEx = RegisterClassExA;
+extern fn UnregisterClassA(class_name: [*:0]const u8, hInstance: *Instance) Status;
+pub const unregisterClass = UnregisterClassA;
+extern fn PeekMessageA(message: *Message, window: ?*Window, msg_filter_min: c_uint, msg_filter_max: c_uint, remove_msg: PeekMessageOptions) Bool;
+pub const peekMessage = PeekMessageA;
 extern fn TranslateMessage(message: *const Message) Bool;
+pub const translateMessage = TranslateMessage;
 extern fn DispatchMessageA(message: *const Message) isize;
-extern fn DefWindowProcA(window: Window, message_type: MessageType, w_param: usize, l_param: isize) isize;
-extern fn GetWindowRect(window: Window, rect: *Rect) Status;
+pub const dispatchMessage = DispatchMessageA;
+extern fn DefWindowProcA(window: *Window, message_type: MessageType, w_param: usize, l_param: isize) isize;
+pub const defWindowProc = DefWindowProcA;
+extern fn GetWindowRect(window: *Window, rect: *Rect) Status;
+pub const getWindowRect = GetWindowRect;
 extern fn GetLastError() u16;
+pub const getLastError = GetLastError;

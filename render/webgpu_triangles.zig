@@ -1,11 +1,10 @@
 const std = @import("std");
-const platform = @import("../platform.zig");
-const render = @import("../render.zig");
-const webgpu = @import("../bindings/webgpu.zig");
+const platform = @import("platform");
+const webgpu = @import("webgpu");
+
 const webgpu_utils = @import("webgpu_utils.zig");
-const geometry = @import("../geometry.zig");
-const vec2 = @import("../linalg.zig").vec(2, f32);
-const mat2 = @import("../linalg.zig").mat(2, f32);
+const geometry = @import("geometry.zig");
+const linalg = @import("linalg.zig");
 
 const step_angle = std.math.pi / 32.0;
 
@@ -60,15 +59,15 @@ pub const Context = struct {
                 .entry_point = "main",
                 .buffer_count = 1,
                 .buffers = &[1]webgpu.VertexBufferLayout{.{
-                    .array_stride = @sizeOf(render.Vertex),
+                    .array_stride = @sizeOf(Vertex),
                     .attribute_count = 2,
                     .attributes = &[2]webgpu.VertexAttribute{ .{
                         .format = .float32x2,
-                        .offset = @offsetOf(render.Vertex, "pos"),
+                        .offset = @offsetOf(Vertex, "pos"),
                         .shader_location = 0,
                     }, .{
                         .format = .unorm8x4,
-                        .offset = @offsetOf(render.Vertex, "color"),
+                        .offset = @offsetOf(Vertex, "color"),
                         .shader_location = 1,
                     } },
                 }},
@@ -119,7 +118,7 @@ pub const Context = struct {
         });
         pass.setPipeline(context.pipeline);
         for (buffers) |buffer| {
-            pass.setVertexBuffer(0, buffer.vertex_buffer, 0, buffer.vertex_count * @sizeOf(render.Vertex));
+            pass.setVertexBuffer(0, buffer.vertex_buffer, 0, buffer.vertex_count * @sizeOf(Vertex));
             pass.setIndexBuffer(buffer.index_buffer, .uint32, 0, buffer.index_count * @sizeOf(u32));
             pass.drawIndexed(buffer.index_count, 1, 0, 0, 0);
         }

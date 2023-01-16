@@ -1,8 +1,6 @@
 const std = @import("std");
-const win32 = @import("../bindings/win32.zig");
-const platform = @import("../platform.zig");
-
-const err = error.PlatformError;
+const win32 = @import("bindings/win32.zig");
+const common = @import("common.zig");
 
 pub var window_class = win32.WindowClassEx{
     .style = .{ .own_dc = true },
@@ -27,7 +25,7 @@ var message_queue: std.ArrayList(Message) = undefined;
 pub fn init() !void {
     message_queue = std.ArrayList(Message).init(std.heap.c_allocator);
     window_class.instance = @ptrCast(win32.Instance, win32.getModuleHandle(null).?);
-    if (win32.registerClassEx(&window_class) == 0) return err;
+    if (win32.registerClassEx(&window_class) == 0) return common.err;
 }
 
 pub fn deinit() void {
@@ -36,7 +34,7 @@ pub fn deinit() void {
 }
 
 pub const Window = struct {
-    win32: win32.Window,
+    win32: *win32.Window,
 
     pub fn create(position: [2]i32, size: [2]u32, name: [*:0]const u8) !Window {
         const win32_window = win32.createWindowEx(
@@ -52,7 +50,7 @@ pub const Window = struct {
             0,
             window_class.instance,
             null,
-        ) orelse return err;
+        ) orelse return common.err;
         return .{ .win32 = win32_window };
     }
 
@@ -67,14 +65,14 @@ pub const Window = struct {
     pub fn getPosition(window: Window) ![2]i32 {
         var rect: win32.Rect = undefined;
         if (win32.getWindowRect(window.win32, &rect) == .err)
-            return err;
+            return common.err;
         return .{ rect.left, rect.top };
     }
 
     pub fn getSize(window: Window) ![2]u32 {
         var rect: win32.Rect = undefined;
         if (win32.getWindowRect(window.win32, &rect) == .err)
-            return err;
+            return common.err;
         return .{
             @intCast(u32, rect.right - rect.left),
             @intCast(u32, rect.bottom - rect.top),
@@ -82,7 +80,7 @@ pub const Window = struct {
     }
 };
 
-pub fn pollEvents(comptime callback: fn (event: platform.Event, window: Window) anyerror!void) !void {
+pub fn pollEvents(comptime callback: fn (event: common.Event, window: Window) anyerror!void) !void {
     var message: win32.Message = undefined;
     while (win32.peekMessage(&message, null, 0, 0, .remove) == .true) {
         _ = win32.translateMessage(&message);
@@ -137,7 +135,7 @@ pub fn pollEvents(comptime callback: fn (event: platform.Event, window: Window) 
     }
 }
 
-fn windowProc(window: win32.Window, message_type: win32.MessageType, w_param: usize, l_param: isize) callconv(.C) isize {
+fn windowProc(window: *win32.Window, message_type: win32.MessageType, w_param: usize, l_param: isize) callconv(.C) isize {
     message_queue.append(.{
         .window = .{ .win32 = window },
         .message_type = message_type,
@@ -147,7 +145,7 @@ fn windowProc(window: win32.Window, message_type: win32.MessageType, w_param: us
     return win32.defWindowProc(window, message_type, w_param, l_param);
 }
 
-fn buttonToKey(message_type: win32.MessageType, w_param: usize) ?platform.Key {
+fn buttonToKey(message_type: win32.MessageType, w_param: usize) ?common.Key {
     return switch (message_type) {
         .l_button_down, .l_button_up => .mouse_left,
         .m_button_down, .m_button_up => .mouse_middle,
@@ -157,7 +155,7 @@ fn buttonToKey(message_type: win32.MessageType, w_param: usize) ?platform.Key {
     };
 }
 
-fn keycodeToKey(w_param: usize) ?platform.Key {
+fn keycodeToKey(w_param: usize) ?common.Key {
     return switch (w_param) {
         0x41 => .a,
         0x42 => .b,
@@ -284,7 +282,7 @@ pub const GlContext = opaque {
     //     pixel_format_desc.cStencilBits = stencil_size;
 
     //     const pixel_format = ChoosePixelFormat(GetDC(window), &pixel_format_desc);
-    //     if (pixel_format == 0) return err;
+    //     if (pixel_format == 0) return common.err;
     //     _ = SetPixelFormat(GetDC(window), pixel_format, &pixel_format_desc);
 
     //     return wglCreateContext(GetDC(window));
@@ -295,7 +293,7 @@ pub const GlContext = opaque {
     // }
 
     // pub fn makeCurrent(context: *GlContext, window: Window) !void {
-    //     if (wglMakeCurrent(GetDC(window), context) == 0) return err;
+    //     if (wglMakeCurrent(GetDC(window), context) == 0) return common.err;
     // }
 
     // pub fn swapBuffers(window: Window) void {

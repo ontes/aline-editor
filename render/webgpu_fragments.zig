@@ -1,10 +1,9 @@
 const std = @import("std");
-const platform = @import("../platform.zig");
-const render = @import("../render.zig");
-const webgpu = @import("../bindings/webgpu.zig");
+const math = @import("math");
+const platform = @import("platform");
+const webgpu = @import("webgpu");
+
 const webgpu_utils = @import("webgpu_utils.zig");
-const geometry = @import("../geometry.zig");
-const mat3 = @import("../linalg.zig").mat(3, f32);
 
 const err = error.RendererError;
 
@@ -73,13 +72,13 @@ const Entry = extern struct {
 };
 
 pub const Context = struct {
-    instance: webgpu.Instance,
-    surface: webgpu.Surface,
-    adapter: webgpu.Adapter,
-    device: webgpu.Device,
-    swapchain: webgpu.SwapChain,
-    bind_group_layout: webgpu.BindGroupLayout,
-    pipeline: webgpu.RenderPipeline,
+    instance: *webgpu.Instance,
+    surface: *webgpu.Surface,
+    adapter: *webgpu.Adapter,
+    device: *webgpu.Device,
+    swapchain: *webgpu.SwapChain,
+    bind_group_layout: *webgpu.BindGroupLayout,
+    pipeline: *webgpu.RenderPipeline,
 
     pub fn init(window: platform.Window) !Context {
         const instance = webgpu.createInstance(&.{});
@@ -101,7 +100,7 @@ pub const Context = struct {
         const pipeline = device.createRenderPipeline(&.{
             .layout = device.createPipelineLayout(&.{
                 .bind_group_layout_count = 1,
-                .bind_group_layouts = &[1]webgpu.BindGroupLayout{bind_group_layout},
+                .bind_group_layouts = &[1]*webgpu.BindGroupLayout{bind_group_layout},
             }),
             .vertex = .{
                 .module = device.createShaderModule(&.{
@@ -151,7 +150,7 @@ pub const Context = struct {
         context.swapchain = webgpu_utils.createSwapchain(context.device, context.surface, size);
     }
 
-    pub fn draw(context: Context, buffers: []const Buffer) void {
+    pub fn draw(context: Context, comptime draw_fn: fn (pass: *webgpu.RenderPassEncoder) void) void {
         const command_encoder = context.device.createCommandEncoder(&.{});
         const pass = command_encoder.beginRenderPass(&.{
             .color_attachment_count = 1,
@@ -162,39 +161,33 @@ pub const Context = struct {
                 .clear_value = .{ .r = 0.9, .g = 0.9, .b = 0.9, .a = 1 },
             }},
         });
-        pass.setPipeline(context.pipeline);
-        for (buffers) |buffer| {
-            if (buffer.bind_group) |bind_group| {
-                pass.setBindGroup(0, bind_group, 0, &[0]u32{});
-                pass.draw(4, buffer.path_count, 0, 0);
-            }
-        }
+        draw_fn(pass);
         pass.end();
         var command_buffer = command_encoder.finish(&.{});
-        context.device.getQueue().submit(1, &[1]webgpu.CommandBuffer{command_buffer});
+        context.device.getQueue().submit(1, &[1]*webgpu.CommandBuffer{command_buffer});
         context.swapchain.present();
     }
 };
 
 pub const Buffer = struct {
-    context: Context,
+    context: *const Context,
     allocator: std.mem.Allocator,
 
-    transform_buffer: webgpu.Buffer,
-    entries_buffer: webgpu.Buffer,
-    positions_buffer: webgpu.Buffer,
-    angles_buffer: webgpu.Buffer,
-    bind_group: ?webgpu.BindGroup = null,
+    transform_buffer: *webgpu.Buffer,
+    entries_buffer: *webgpu.Buffer,
+    positions_buffer: *webgpu.Buffer,
+    angles_buffer: *webgpu.Buffer,
+    bind_group: ?*webgpu.BindGroup = null,
     path_count: u32 = 0,
 
     entries: std.ArrayListUnmanaged(Entry) = .{},
     data: std.MultiArrayList(struct { position: @Vector(2, f32), angle: f32 }) = .{},
 
-    pub fn init(context: Context, allocator: std.mem.Allocator) Buffer {
+    pub fn init(context: *const Context, allocator: std.mem.Allocator) Buffer {
         return .{
             .context = context,
             .allocator = allocator,
-            .transform_buffer = context.device.createBuffer(&.{ .usage = .{ .uniform = true, .copy_dst = true }, .size = @sizeOf(mat3.Matrix) }),
+            .transform_buffer = context.device.createBuffer(&.{ .usage = .{ .uniform = true, .copy_dst = true }, .size = @sizeOf(math.Mat3) }),
             .entries_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
             .positions_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
             .angles_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
@@ -209,8 +202,8 @@ pub const Buffer = struct {
         buffer.data.deinit(buffer.allocator);
     }
 
-    pub fn setTransform(buffer: *Buffer, transform: mat3.Matrix) void {
-        buffer.context.device.getQueue().writeBuffer(buffer.transform_buffer, 0, &transform, @sizeOf(mat3.Matrix));
+    pub fn setTransform(buffer: *Buffer, transform: math.Mat3) void {
+        buffer.context.device.getQueue().writeBuffer(buffer.transform_buffer, 0, &transform, @sizeOf(math.Mat3));
     }
 
     pub fn clear(buffer: *Buffer) void {
@@ -255,12 +248,20 @@ pub const Buffer = struct {
             .layout = buffer.context.bind_group_layout,
             .entry_count = 4,
             .entries = &[4]webgpu.BindGroupEntry{
-                .{ .binding = 0, .buffer = buffer.transform_buffer, .offset = 0, .size = @sizeOf(mat3.Matrix) },
+                .{ .binding = 0, .buffer = buffer.transform_buffer, .offset = 0, .size = @sizeOf(math.Mat3) },
                 .{ .binding = 1, .buffer = buffer.entries_buffer, .offset = 0, .size = entries_size },
                 .{ .binding = 2, .buffer = buffer.positions_buffer, .offset = 0, .size = positions_size },
                 .{ .binding = 3, .buffer = buffer.angles_buffer, .offset = 0, .size = angles_size },
             },
         }) else null;
+    }
+
+    pub fn draw(buffer: Buffer, pass: *webgpu.RenderPassEncoder) void {
+        if (buffer.bind_group) |bind_group| {
+            pass.setPipeline(buffer.context.pipeline);
+            pass.setBindGroup(0, bind_group, 0, &[0]u32{});
+            pass.draw(4, buffer.path_count, 0, 0);
+        }
     }
 
     pub fn generator(buffer: *Buffer, color: [4]u8) Generator {
@@ -295,7 +296,7 @@ pub const Generator = struct {
                 });
                 p.is_first = false;
             } else {
-                const bounding_box = geometry.Arc.boundingBox(.{
+                const bounding_box = math.Arc.boundingBox(.{
                     .pos_a = p.g.buffer.data.items(.position)[p.g.buffer.data.len - 1],
                     .angle = p.g.buffer.data.items(.angle)[p.g.buffer.data.len - 1],
                     .pos_b = pos,
@@ -310,7 +311,7 @@ pub const Generator = struct {
         pub fn end(p: *Pass, pos: @Vector(2, f32), angle: ?f32) !void {
             std.debug.assert(!p.is_first); // we can't render just one point
             try p.add(pos, angle.?);
-            const bounding_box = geometry.Arc.boundingBox(.{
+            const bounding_box = math.Arc.boundingBox(.{
                 .pos_a = p.g.buffer.data.items(.position)[p.g.buffer.data.len - 1],
                 .angle = p.g.buffer.data.items(.angle)[p.g.buffer.data.len - 1],
                 .pos_b = p.g.buffer.data.items(.position)[p.g.buffer.lastEntry().offset],

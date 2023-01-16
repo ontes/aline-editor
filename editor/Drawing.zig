@@ -1,12 +1,11 @@
 const std = @import("std");
-const render = @import("../render.zig");
-const geometry = @import("../geometry.zig");
-const generators = @import("../generators.zig");
+const math = @import("math");
+const render = @import("render");
 
 pub const Style = struct {
-    stroke: generators.Stroke,
-    fill_color: render.Color,
-    stroke_color: render.Color,
+    stroke: math.Stroke,
+    fill_color: [4]u8,
+    stroke_color: [4]u8,
 
     pub fn isFilled(style: Style) bool {
         return style.fill_color[3] > 0;
@@ -17,7 +16,7 @@ const Drawing = @This();
 
 allocator: std.mem.Allocator,
 entries: std.MultiArrayList(struct { len: u32, looped: bool, style: Style }) = .{},
-data: std.MultiArrayList(struct { position: geometry.Vec2, angle: f32 = 0 }) = .{},
+data: std.MultiArrayList(struct { position: math.Vec2, angle: f32 = 0 }) = .{},
 
 pub inline fn init(allocator: std.mem.Allocator) Drawing {
     return .{ .allocator = allocator };
@@ -56,7 +55,7 @@ fn getAnglesLen(drawing: Drawing, index: u32) u32 {
     return if (drawing.entries.items(.looped)[index]) drawing.getLen(index) else drawing.getLen(index) - 1;
 }
 
-pub fn getPositions(drawing: Drawing, index: u32) []geometry.Vec2 {
+pub fn getPositions(drawing: Drawing, index: u32) []math.Vec2 {
     const offset = drawing.getOffset(index);
     return drawing.data.items(.position)[offset .. offset + drawing.getLen(index)];
 }
@@ -64,16 +63,16 @@ pub fn getAngles(drawing: Drawing, index: u32) []f32 {
     const offset = drawing.getOffset(index);
     return drawing.data.items(.angle)[offset .. offset + drawing.getAnglesLen(index)];
 }
-pub fn getPath(drawing: Drawing, index: u32) geometry.Path {
+pub fn getPath(drawing: Drawing, index: u32) math.Path {
     return .{ .positions = drawing.getPositions(index), .angles = drawing.getAngles(index) };
 }
 
-pub fn addPoint(drawing: *Drawing, position: geometry.Vec2, style: Style) !void {
+pub fn addPoint(drawing: *Drawing, position: math.Vec2, style: Style) !void {
     try drawing.data.append(drawing.allocator, .{ .position = position });
     try drawing.entries.append(drawing.allocator, .{ .len = 1, .looped = false, .style = style });
 }
 
-pub fn appendPoint(drawing: *Drawing, index: u32, position: geometry.Vec2, angle: f32) !void {
+pub fn appendPoint(drawing: *Drawing, index: u32, position: math.Vec2, angle: f32) !void {
     const offset = drawing.getOffset(index);
     drawing.data.items(.angle)[offset + drawing.getLen(index) - 1] = angle;
     try drawing.data.insert(drawing.allocator, offset + drawing.getLen(index), .{ .position = position });
@@ -98,7 +97,7 @@ pub fn remove(drawing: *Drawing, index: u32) void {
 pub fn reversePath(drawing: Drawing, index: u32) void {
     const positions = drawing.getPositions(index);
     const angles = drawing.getAngles(index);
-    std.mem.reverse(geometry.Vec2, if (positions.len == angles.len) positions[0 .. positions.len - 1] else positions);
+    std.mem.reverse(math.Vec2, if (positions.len == angles.len) positions[0 .. positions.len - 1] else positions);
     std.mem.reverse(f32, angles);
     for (angles) |*angle|
         angle.* = -angle.*;
@@ -110,13 +109,13 @@ pub fn joinPaths(drawing: *Drawing, index_a: u32, index_b: u32, angle: f32) void
         const from = drawing.getOffset(index_a) + drawing.getLen(index_a);
         const to = drawing.getOffset(index_b) + drawing.getLen(index_b);
         const amount = to - from - drawing.getLen(index_b);
-        std.mem.rotate(geometry.Vec2, drawing.data.items(.position)[from..to], amount);
+        std.mem.rotate(math.Vec2, drawing.data.items(.position)[from..to], amount);
         std.mem.rotate(f32, drawing.data.items(.angle)[from..to], amount);
     } else {
         const from = drawing.getOffset(index_b);
         const to = drawing.getOffset(index_a) + drawing.getLen(index_a);
         const amount = drawing.getLen(index_b);
-        std.mem.rotate(geometry.Vec2, drawing.data.items(.position)[from..to], amount);
+        std.mem.rotate(math.Vec2, drawing.data.items(.position)[from..to], amount);
         std.mem.rotate(f32, drawing.data.items(.angle)[from..to], amount);
     }
     drawing.entries.items(.len)[index_a] += drawing.entries.items(.len)[index_b];
@@ -154,10 +153,10 @@ const PathIterator = struct {
     i: u32 = 0,
     offset: u32 = 0,
 
-    pub fn next(it: *PathIterator) ?geometry.Path {
+    pub fn next(it: *PathIterator) ?math.Path {
         if (it.i >= it.drawing.entries.len)
             return null;
-        const path = geometry.Path{
+        const path = math.Path{
             .positions = it.drawing.data.items(.position)[it.offset .. it.offset + it.drawing.getLen(it.i)],
             .angles = it.drawing.data.items(.angle)[it.offset .. it.offset + it.drawing.getAnglesLen(it.i)],
         };
@@ -181,7 +180,7 @@ const ReversePathIterator = struct {
     i: u32,
     offset: u32,
 
-    pub fn next(it: *ReversePathIterator) ?geometry.Path {
+    pub fn next(it: *ReversePathIterator) ?math.Path {
         if (it.i == 0)
             return null;
         it.i -= 1;

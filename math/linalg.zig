@@ -1,5 +1,17 @@
 const std = @import("std");
 
+pub const vec2 = @import("linalg.zig").vec(2, f32);
+pub const Vec2 = vec2.Vector;
+
+pub const vec3 = @import("linalg.zig").vec(3, f32);
+pub const Vec3 = vec3.Vector;
+
+pub const mat2 = @import("linalg.zig").mat(2, f32);
+pub const Mat2 = mat2.Matrix;
+
+pub const mat3 = @import("linalg.zig").mat(3, f32);
+pub const Mat3 = mat3.Matrix;
+
 pub fn vec(comptime len: comptime_int, comptime Scalar: type) type {
     return struct {
         pub const Vector = @Vector(len, Scalar);

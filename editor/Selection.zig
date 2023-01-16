@@ -1,6 +1,7 @@
 const std = @import("std");
-const render = @import("../render.zig");
-const geometry = @import("../geometry.zig");
+const math = @import("math");
+const render = @import("render");
+
 const Drawing = @import("Drawing.zig");
 
 pub const Interval = struct {
@@ -23,11 +24,11 @@ pub const Interval = struct {
         return interval.a == interval.b;
     }
 
-    pub fn isSingleSegment(interval: Interval, path: geometry.Path) bool {
+    pub fn isSingleSegment(interval: Interval, path: math.Path) bool {
         return interval.a + 1 == interval.b or (path.isLooped() and path.next(interval.a) == interval.b);
     }
 
-    pub fn isLooseEnd(interval: Interval, path: geometry.Path) bool {
+    pub fn isLooseEnd(interval: Interval, path: math.Path) bool {
         return interval.isSingleNode() and !path.isLooped() and
             (interval.a == 0 or interval.a == path.len() - 1);
     }
@@ -255,35 +256,35 @@ pub fn generateSelected(sel: Selection, gen: anytype) !void {
     }
 }
 
-pub fn transformSelected(sel: *Selection, mat: geometry.Mat3) void {
+pub fn transformSelected(sel: *Selection, mat: math.Mat3) void {
     for (sel.loops.items) |index| {
         for (sel.drawing.getPositions(index)) |*pos|
-            pos.* = geometry.transform(mat, pos.*);
+            pos.* = math.transform(mat, pos.*);
     }
     for (sel.intervals.items(.index)) |index, i| {
         const interval = sel.intervals.items(.interval)[i];
         const positions = sel.drawing.getPositions(index);
         var node = interval.a;
         while (node != interval.b) : (node = (node + 1) % @intCast(u32, positions.len))
-            positions[node] = geometry.transform(mat, positions[node]);
-        positions[node] = geometry.transform(mat, positions[node]);
+            positions[node] = math.transform(mat, positions[node]);
+        positions[node] = math.transform(mat, positions[node]);
     }
 }
 
-pub fn generateTransformEdges(sel: Selection, mat: geometry.Mat3, gen: anytype) !void {
+pub fn generateTransformEdges(sel: Selection, mat: math.Mat3, gen: anytype) !void {
     for (sel.intervals.items(.index)) |index, j| {
         const interval = sel.intervals.items(.interval)[j];
         const path = sel.drawing.getPath(index);
         if ((path.isLooped() or interval.a > 0) and !sel.isSelectedNode(index, path.prev(interval.a))) {
             var arc = path.getArc(path.prev(interval.a));
-            arc.pos_b = geometry.transform(mat, arc.pos_b);
+            arc.pos_b = math.transform(mat, arc.pos_b);
             try arc.generate(gen);
         }
         if (path.isLooped() or interval.b < path.len() - 1) {
             var arc = path.getArc(interval.b);
-            arc.pos_a = geometry.transform(mat, arc.pos_a);
+            arc.pos_a = math.transform(mat, arc.pos_a);
             if (sel.isSelectedNode(index, path.next(interval.b)))
-                arc.pos_b = geometry.transform(mat, arc.pos_b);
+                arc.pos_b = math.transform(mat, arc.pos_b);
             try arc.generate(gen);
         }
     }

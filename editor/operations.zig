@@ -1,16 +1,14 @@
 const std = @import("std");
-const render = @import("../render.zig");
-const geometry = @import("../geometry.zig");
-const platform = @import("../platform.zig");
-const editor = @import("../editor.zig");
-const generators = @import("../generators.zig");
-const mat3 = @import("../linalg.zig").mat(3, f32);
+const math = @import("math");
+const platform = @import("platform");
+const render = @import("render");
 
+const editor = @import("editor.zig");
 const Drawing = @import("Drawing.zig");
 const Selection = @import("Selection.zig");
 const properties = @import("properties.zig");
 const snapping = @import("snapping.zig");
-const state = @import("state.zig");
+const input = @import("input.zig");
 
 const default_style = Drawing.Style{
     .stroke = .{ .width = 2, .cap = .round },
@@ -79,7 +77,7 @@ pub const AddPoint = struct {
     }
 
     pub fn generateHelper(op: AddPoint, _: Selection, gen: anytype) !void {
-        var pass = state.wideStroke().generator(gen).begin();
+        var pass = input.wideStroke().generator(gen).begin();
         try pass.end(op.position.val, null);
     }
 };
@@ -135,13 +133,13 @@ pub const Append = struct {
         const index = sel.intervals.items(.index)[0];
         const interval = sel.intervals.items(.interval)[0];
 
-        try geometry.Arc.generate(.{
+        try math.Arc.generate(.{
             .pos_a = sel.drawing.getPath(index).positions[interval.a],
             .pos_b = if (snapping.snapToLooseEnd(sel.drawing, op.position.val)) |res|
                 sel.drawing.getPositions(res.index)[res.node]
             else
                 op.position.val,
-        }, state.standardStroke().generator(gen));
+        }, input.standardStroke().generator(gen));
     }
 };
 
@@ -220,8 +218,8 @@ pub const Move = struct {
         try op.offset.onEvent(event);
     }
 
-    fn getMat(op: Move) geometry.Mat3 {
-        return mat3.translate(op.offset.val);
+    fn getMat(op: Move) math.Mat3 {
+        return math.mat3.translate(op.offset.val);
     }
 
     pub fn apply(op: Move, sel: Selection) !Selection {
@@ -231,8 +229,8 @@ pub const Move = struct {
     }
 
     pub fn generateHelper(op: Move, sel: Selection, gen: anytype) !void {
-        try sel.generateSelected(generators.transformGenerator(op.getMat(), state.wideStroke().generator(gen)));
-        try sel.generateTransformEdges(op.getMat(), state.standardStroke().generator(gen));
+        try sel.generateSelected(math.transformGenerator(op.getMat(), input.wideStroke().generator(gen)));
+        try sel.generateTransformEdges(op.getMat(), input.standardStroke().generator(gen));
     }
 };
 
@@ -349,6 +347,6 @@ pub const ChangeAngle = struct {
         const interval = sel.intervals.items(.interval)[0];
         var arc = path.getArc(interval.a);
         arc.angle = op.angle.val;
-        try arc.generate(state.standardStroke().generator(gen));
+        try arc.generate(input.standardStroke().generator(gen));
     }
 };

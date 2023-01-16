@@ -1,20 +1,22 @@
-comptime {
-    if (@sizeOf(c_ulong) != @sizeOf(usize))
-        @compileError("sizes of c_ulong and usize have to be equal for the X11 bindings");
-}
-
-pub const Display = *opaque {};
-pub const Colormap = *opaque {};
-pub const Cursor = *opaque {};
-pub const Drawable = *opaque {};
-pub const Window = *opaque {};
-pub const GC = *opaque {};
-pub const Font = *opaque {};
-
+pub const ID = c_ulong;
+pub const Mask = c_ulong;
 pub const Atom = c_ulong;
-pub const KeySym = c_ulong;
-pub const Time = c_ulong;
 pub const VisualID = c_ulong;
+pub const Time = c_ulong;
+
+pub const Window = ID;
+pub const Drawable = ID;
+pub const Font = ID;
+pub const Pixmap = ID;
+pub const Cursor = ID;
+pub const Colormap = ID;
+pub const GContext = ID;
+pub const KeySym = ID;
+
+pub const KeyCode = u8;
+
+pub const GC = opaque {};
+pub const Display = opaque {};
 
 pub const Bool = enum(c_int) {
     false = 0,
@@ -105,7 +107,7 @@ pub const KeyEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     root: Window,
     subwindow: Window,
@@ -123,7 +125,7 @@ pub const ButtonEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     root: Window,
     subwindow: Window,
@@ -141,7 +143,7 @@ pub const MotionEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     root: Window,
     subwindow: Window,
@@ -159,7 +161,7 @@ pub const CrossingEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     root: Window,
     subwindow: Window,
@@ -179,7 +181,7 @@ pub const FocusEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     mode: NotifyMode,
     detail: c_int,
@@ -189,7 +191,7 @@ pub const KeymapEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     key_vector: [32]u8,
 };
@@ -198,7 +200,7 @@ pub const ExposeEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     x: c_int,
     y: c_int,
@@ -211,7 +213,7 @@ pub const GraphicsExposeEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     drawable: Drawable,
     x: c_int,
     y: c_int,
@@ -226,7 +228,7 @@ pub const NoExposeEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     drawable: Drawable,
     major_code: c_int,
     minor_code: c_int,
@@ -236,7 +238,7 @@ pub const VisibilityEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     state: c_int,
 };
@@ -245,7 +247,7 @@ pub const CreateEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     parent: Window,
     window: Window,
     x: c_int,
@@ -260,7 +262,7 @@ pub const DestroyEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     event: Window,
     window: Window,
 };
@@ -269,7 +271,7 @@ pub const UnmapEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     event: Window,
     window: Window,
     from_configure: c_int,
@@ -279,7 +281,7 @@ pub const MapEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     event: Window,
     window: Window,
     override_redirect: c_int,
@@ -289,7 +291,7 @@ pub const MapRequestEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     parent: Window,
     window: Window,
 };
@@ -298,7 +300,7 @@ pub const ReparentEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     event: Window,
     window: Window,
     parent: Window,
@@ -311,7 +313,7 @@ pub const ConfigureEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     event: Window,
     window: Window,
     x: c_int,
@@ -327,7 +329,7 @@ pub const GravityEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     event: Window,
     window: Window,
     x: c_int,
@@ -338,7 +340,7 @@ pub const ResizeRequestEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     width: c_int,
     height: c_int,
@@ -348,7 +350,7 @@ pub const ConfigureRequestEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     parent: Window,
     window: Window,
     x: c_int,
@@ -365,7 +367,7 @@ pub const CirculateEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     event: Window,
     window: Window,
     place: c_int,
@@ -375,7 +377,7 @@ pub const CirculateRequestEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     parent: Window,
     window: Window,
     place: c_int,
@@ -385,7 +387,7 @@ pub const PropertyEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     atom: Atom,
     time: Time,
@@ -396,7 +398,7 @@ pub const SelectionClearEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     selection: Atom,
     time: Time,
@@ -406,7 +408,7 @@ pub const SelectionRequestEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     owner: Window,
     requestor: Window,
     selection: Atom,
@@ -419,7 +421,7 @@ pub const SelectionEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     requestor: Window,
     selection: Atom,
     target: Atom,
@@ -431,7 +433,7 @@ pub const ColormapEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     colormap: Colormap,
     new: c_int,
@@ -442,7 +444,7 @@ pub const ClientMessageEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     message_type: Atom,
     format: c_int,
@@ -457,7 +459,7 @@ pub const MappingEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
     request: c_int,
     first_keycode: c_int,
@@ -466,7 +468,7 @@ pub const MappingEvent = extern struct {
 
 pub const ErrorEvent = extern struct {
     type: EventType,
-    display: Display,
+    display: *Display,
     resourceid: *anyopaque,
     serial: c_ulong,
     error_code: u8,
@@ -478,7 +480,7 @@ pub const AnyEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     window: Window,
 };
 
@@ -486,7 +488,7 @@ pub const GenericEvent = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     extension: c_int,
     evtype: c_int,
 };
@@ -495,7 +497,7 @@ pub const GenericEventCookie = extern struct {
     type: EventType,
     serial: c_ulong,
     send_event: Bool,
-    display: Display,
+    display: *Display,
     extension: c_int,
     evtype: c_int,
     cookie: c_uint,
@@ -583,7 +585,7 @@ pub const Depth = extern struct {
 
 pub const Screen = extern struct {
     ext_data: ?*anyopaque,
-    display: Display,
+    display: *Display,
     root: Window,
     width: c_int,
     height: c_int,
@@ -593,7 +595,7 @@ pub const Screen = extern struct {
     depths: *Depth,
     root_depth: c_int,
     root_visual: *Visual,
-    default_gc: GC,
+    default_gc: *GC,
     cmap: Colormap,
     white_pixel: c_ulong,
     black_pixel: c_ulong,
@@ -630,54 +632,53 @@ pub const WindowAttributes = extern struct {
     screen: *Screen,
 };
 
+extern fn XOpenDisplay(display_name: ?[*:0]const u8) ?*Display;
 pub const openDisplay = XOpenDisplay;
+extern fn XCloseDisplay(display: *Display) void;
 pub const closeDisplay = XCloseDisplay;
+extern fn XDefaultRootWindow(display: *Display) Window;
 pub const defaultRootWindow = XDefaultRootWindow;
+extern fn XCreateSimpleWindow(display: *Display, parent: Window, x: c_int, y: c_int, width: c_uint, height: c_uint, border_width: c_uint, border: c_ulong, background: c_ulong) Window;
 pub const createSimpleWindow = XCreateSimpleWindow;
+extern fn XDestroyWindow(display: *Display, window: Window) void;
 pub const destroyWindow = XDestroyWindow;
+extern fn XSelectInput(display: *Display, window: Window, event_mask: EventMask) void;
 pub const selectInput = XSelectInput;
+extern fn XInternAtom(display: *Display, atom_name: [*:0]const u8, only_if_exists: Bool) Atom;
 pub const internAtom = XInternAtom;
+extern fn XSetWMProtocols(display: *Display, window: Window, protocols: [*]Atom, count: c_int) Status;
 pub const setWMProtocols = XSetWMProtocols;
+extern fn XMapWindow(display: *Display, window: Window) void;
 pub const mapWindow = XMapWindow;
+extern fn XMoveWindow(display: *Display, window: Window, x: c_int, y: c_int) void;
 pub const moveWindow = XMoveWindow;
+extern fn XResizeWindow(display: *Display, window: Window, width: c_uint, height: c_uint) void;
 pub const resizeWindow = XResizeWindow;
+extern fn XStoreName(display: *Display, window: Window, name: [*:0]const u8) void;
 pub const storeName = XStoreName;
+extern fn XGrabPointer(display: *Display, window: Window, owner_events: Bool, event_mask: c_uint, pointer_mode: GrabMode, keyboard_mode: GrabMode, confine_to: Window, cursor: Cursor, time: Time) GrabResult;
 pub const grabPointer = XGrabPointer;
+extern fn XUngrabPointer(display: *Display, time: Time) void;
 pub const ungrabPointer = XUngrabPointer;
+extern fn XPending(display: *Display) c_int;
 pub const pending = XPending;
+extern fn XNextEvent(display: *Display, event_return: *Event) void;
 pub const nextEvent = XNextEvent;
+extern fn XPeekEvent(display: *Display, event_return: *Event) void;
 pub const peekEvent = XPeekEvent;
-pub const lookupKeysym = XLookupKeysym;
-pub const refreshKeyboardMapping = XRefreshKeyboardMapping;
-pub const queryPointer = XQueryPointer;
-pub const getWindowAttributes = XGetWindowAttributes;
-pub const warpPointer = XWarpPointer;
-pub const defaultScreen = XDefaultScreen;
-pub const free = XFree;
-pub const initThreads = XInitThreads;
-
-extern fn XOpenDisplay(display_name: ?[*:0]const u8) ?Display;
-extern fn XCloseDisplay(display: Display) void;
-extern fn XDefaultRootWindow(display: Display) Window;
-extern fn XCreateSimpleWindow(display: Display, parent: Window, x: c_int, y: c_int, width: c_uint, height: c_uint, border_width: c_uint, border: c_ulong, background: c_ulong) Window;
-extern fn XDestroyWindow(display: Display, window: Window) void;
-extern fn XSelectInput(display: Display, window: Window, event_mask: EventMask) void;
-extern fn XInternAtom(display: Display, atom_name: [*:0]const u8, only_if_exists: Bool) Atom;
-extern fn XSetWMProtocols(display: Display, window: Window, protocols: [*]Atom, count: c_int) Status;
-extern fn XMapWindow(display: Display, window: Window) void;
-extern fn XMoveWindow(display: Display, window: Window, x: c_int, y: c_int) void;
-extern fn XResizeWindow(display: Display, window: Window, width: c_uint, height: c_uint) void;
-extern fn XStoreName(display: Display, window: Window, name: [*:0]const u8) void;
-extern fn XGrabPointer(display: Display, window: Window, owner_events: Bool, event_mask: c_uint, pointer_mode: GrabMode, keyboard_mode: GrabMode, confine_to: ?Window, cursor: ?Cursor, time: Time) GrabResult;
-extern fn XUngrabPointer(display: Display, time: Time) void;
-extern fn XPending(display: Display) c_int;
-extern fn XNextEvent(display: Display, event_return: *Event) void;
-extern fn XPeekEvent(display: Display, event_return: *Event) void;
 extern fn XLookupKeysym(key_event: *KeyEvent, index: c_int) KeySym;
+pub const lookupKeysym = XLookupKeysym;
 extern fn XRefreshKeyboardMapping(mapping_event: *MappingEvent) void;
-extern fn XQueryPointer(display: Display, window: Window, root_return: *Window, child_return: *Window, root_x_return: *c_int, root_y_return: *c_int, x_return: *c_int, y_return: *c_int, mask_return: *c_uint) Bool;
-extern fn XGetWindowAttributes(display: Display, window: Window, window_attributes_return: *WindowAttributes) Status;
-extern fn XWarpPointer(display: Display, src_w: ?Window, dest_w: ?Window, src_x: c_int, src_y: c_int, src_width: c_uint, src_height: c_uint, dest_x: c_int, dest_y: c_int) void;
-extern fn XDefaultScreen(display: Display) c_int;
+pub const refreshKeyboardMapping = XRefreshKeyboardMapping;
+extern fn XQueryPointer(display: *Display, window: Window, root_return: *Window, child_return: *Window, root_x_return: *c_int, root_y_return: *c_int, x_return: *c_int, y_return: *c_int, mask_return: *c_uint) Bool;
+pub const queryPointer = XQueryPointer;
+extern fn XGetWindowAttributes(display: *Display, window: Window, window_attributes_return: *WindowAttributes) Status;
+pub const getWindowAttributes = XGetWindowAttributes;
+extern fn XWarpPointer(display: *Display, src_w: Window, dest_w: Window, src_x: c_int, src_y: c_int, src_width: c_uint, src_height: c_uint, dest_x: c_int, dest_y: c_int) void;
+pub const warpPointer = XWarpPointer;
+extern fn XDefaultScreen(display: *Display) c_int;
+pub const defaultScreen = XDefaultScreen;
 extern fn XFree(data: *anyopaque) void;
+pub const free = XFree;
 extern fn XInitThreads() Status;
+pub const initThreads = XInitThreads;

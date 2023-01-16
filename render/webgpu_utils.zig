@@ -1,10 +1,10 @@
 const std = @import("std");
-const webgpu = @import("../bindings/webgpu.zig");
-const platform = @import("../platform.zig");
+const webgpu = @import("webgpu");
+const platform = @import("platform");
 
 const err = error.RendererError;
 
-pub fn createSurface(instance: webgpu.Instance, window: platform.Window) webgpu.Surface {
+pub fn createSurface(instance: *webgpu.Instance, window: platform.Window) *webgpu.Surface {
     return instance.createSurface(&.{
         .next_in_chain = switch (@import("builtin").target.os.tag) {
             .windows => &webgpu.SurfaceDescriptorFromWindowsHWND{
@@ -13,7 +13,7 @@ pub fn createSurface(instance: webgpu.Instance, window: platform.Window) webgpu.
             },
             .linux => &webgpu.SurfaceDescriptorFromXlibWindow{
                 .display = platform.display,
-                .window = @intCast(u32, @ptrToInt(window.x11)),
+                .window = @intCast(u32, window.x11),
             },
             // .macos => blk: {
             //     const ns_window = glfw.Native(.{ .cocoa = true }).getCocoaWindow(window);
@@ -35,13 +35,13 @@ pub fn createSurface(instance: webgpu.Instance, window: platform.Window) webgpu.
     });
 }
 
-pub fn createAdapter(instance: webgpu.Instance, surface: webgpu.Surface) !webgpu.Adapter {
+pub fn createAdapter(instance: *webgpu.Instance, surface: *webgpu.Surface) !*webgpu.Adapter {
     const Response = struct {
         status: webgpu.RequestAdapterStatus = .unknown,
-        adapter: ?webgpu.Adapter = null,
+        adapter: ?*webgpu.Adapter = null,
     };
     const callback = struct {
-        fn callback(status: webgpu.RequestAdapterStatus, adapter: ?webgpu.Adapter, message: [*:0]const u8, userdata: ?*anyopaque) callconv(.C) void {
+        fn callback(status: webgpu.RequestAdapterStatus, adapter: ?*webgpu.Adapter, message: [*:0]const u8, userdata: ?*anyopaque) callconv(.C) void {
             if (status == .error_) @panic(std.mem.span(message));
             @ptrCast(*Response, @alignCast(@alignOf(*Response), userdata.?)).* = .{ .status = status, .adapter = adapter };
         }
@@ -62,13 +62,13 @@ pub fn createAdapter(instance: webgpu.Instance, surface: webgpu.Surface) !webgpu
     return response.adapter.?;
 }
 
-pub fn createDevice(adapter: webgpu.Adapter) !webgpu.Device {
+pub fn createDevice(adapter: *webgpu.Adapter) !*webgpu.Device {
     const Response = struct {
         status: webgpu.RequestDeviceStatus = .unknown,
-        device: ?webgpu.Device = null,
+        device: ?*webgpu.Device = null,
     };
     const callback = struct {
-        fn callback(status: webgpu.RequestDeviceStatus, device: ?webgpu.Device, message: [*:0]const u8, userdata: ?*anyopaque) callconv(.C) void {
+        fn callback(status: webgpu.RequestDeviceStatus, device: ?*webgpu.Device, message: [*:0]const u8, userdata: ?*anyopaque) callconv(.C) void {
             if (status == .error_) @panic(std.mem.span(message));
             @ptrCast(*Response, @alignCast(@alignOf(*Response), userdata.?)).* = .{ .status = status, .device = device };
         }
@@ -97,7 +97,7 @@ pub fn createDevice(adapter: webgpu.Adapter) !webgpu.Device {
     return response.device.?;
 }
 
-pub fn createSwapchain(device: webgpu.Device, surface: webgpu.Surface, size: [2]u32) webgpu.SwapChain {
+pub fn createSwapchain(device: *webgpu.Device, surface: *webgpu.Surface, size: [2]u32) *webgpu.SwapChain {
     return device.createSwapChain(surface, &.{
         .usage = .{ .render_attachment = true },
         .format = .bgra8_unorm,

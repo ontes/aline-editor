@@ -1,10 +1,4 @@
-const std = @import("std");
-
-pub usingnamespace switch (@import("builtin").os.tag) {
-    .windows => @import("platform/windows.zig"),
-    .linux => @import("platform/linux_x11.zig"),
-    else => @compileError("unsupported os"),
-};
+pub const err = error.PlatformError;
 
 pub const Event = union(enum) {
     key_press: Key,
@@ -49,16 +43,16 @@ pub const Key = enum(u8) {
     x,
     y,
     z,
-    n1,
-    n2,
-    n3,
-    n4,
-    n5,
-    n6,
-    n7,
-    n8,
-    n9,
-    n0,
+    n_1,
+    n_2,
+    n_3,
+    n_4,
+    n_5,
+    n_6,
+    n_7,
+    n_8,
+    n_9,
+    n_0,
     enter,
     escape,
     backspace,
