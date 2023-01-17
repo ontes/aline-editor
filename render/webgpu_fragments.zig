@@ -264,7 +264,7 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn generator(buffer: *Buffer, color: [4]u8) Generator {
+    pub fn generator(buffer: *Buffer, color: [4]f32) Generator {
         return .{ .buffer = buffer, .color = color };
     }
 
@@ -275,7 +275,7 @@ pub const Buffer = struct {
 
 pub const Generator = struct {
     buffer: *Buffer,
-    color: [4]u8,
+    color: [4]f32,
 
     pub fn begin(g: Generator) Pass {
         return .{ .g = g };
@@ -292,7 +292,7 @@ pub const Generator = struct {
                     .len = 0,
                     .min_pos = pos,
                     .max_pos = pos,
-                    .color = colorToFloats(p.g.color),
+                    .color = p.g.color,
                 });
                 p.is_first = false;
             } else {
@@ -322,12 +322,3 @@ pub const Generator = struct {
         }
     };
 };
-
-fn colorToFloats(color: [4]u8) [4]f32 {
-    return .{
-        @intToFloat(f32, color[0]) / 255.0,
-        @intToFloat(f32, color[1]) / 255.0,
-        @intToFloat(f32, color[2]) / 255.0,
-        @intToFloat(f32, color[3]) / 255.0,
-    };
-}

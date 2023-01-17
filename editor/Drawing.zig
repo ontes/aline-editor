@@ -4,8 +4,8 @@ const render = @import("render");
 
 pub const Style = struct {
     stroke: math.Stroke,
-    fill_color: [4]u8,
-    stroke_color: [4]u8,
+    fill_color: [4]f32,
+    stroke_color: [4]f32,
 
     pub fn isFilled(style: Style) bool {
         return style.fill_color[3] > 0;

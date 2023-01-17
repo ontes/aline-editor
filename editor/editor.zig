@@ -10,8 +10,8 @@ const snapping = @import("snapping.zig");
 const input = @import("input.zig");
 const ui = @import("ui.zig");
 
-const select_color = [4]u8{ 255, 255, 64, 255 };
-const preview_color = [4]u8{ 255, 64, 64, 255 };
+const select_color = [4]f32{ 1, 1, 0.25, 1 };
+const preview_color = [4]f32{ 1, 0.25, 0.25, 1 };
 
 var history: History = undefined;
 var pending_operation: ?operations.AnyOperation = null;

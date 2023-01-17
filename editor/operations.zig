@@ -12,8 +12,8 @@ const input = @import("input.zig");
 
 const default_style = Drawing.Style{
     .stroke = .{ .width = 2, .cap = .round },
-    .fill_color = .{ 128, 255, 128, 255 },
-    .stroke_color = .{ 0, 0, 0, 255 },
+    .fill_color = .{ 0.5, 1, 0.5, 1 },
+    .stroke_color = .{ 0, 0, 0, 1 },
 };
 
 pub const AnyOperation = union(enum) {
