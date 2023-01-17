@@ -2,7 +2,7 @@ const std = @import("std");
 const platform = @import("platform");
 const render = @import("render");
 const imgui = @import("imgui");
-const imgui_impl_wgpu = imgui.impl_wgpu(@import("webgpu"));
+const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 
 const operations = @import("operations.zig");
 

@@ -2,13 +2,18 @@ const std = @import("std");
 const imgui_build = @import("imgui-zig/build.zig");
 const dawn_build = @import("dawn-zig/build.zig");
 
+const webgpu_pkg = std.build.Pkg{
+    .name = "webgpu",
+    .source = .{ .path = "dawn-zig/webgpu.zig" },
+};
 const imgui_pkg = std.build.Pkg{
     .name = "imgui",
     .source = .{ .path = "imgui-zig/imgui.zig" },
 };
-const webgpu_pkg = std.build.Pkg{
-    .name = "webgpu",
-    .source = .{ .path = "dawn-zig/webgpu.zig" },
+const imgui_impl_wgpu_pkg = std.build.Pkg{
+    .name = "imgui_impl_wgpu",
+    .source = .{ .path = "imgui-zig/imgui_impl_wgpu.zig" },
+    .dependencies = &.{webgpu_pkg},
 };
 const platform_pkg = std.build.Pkg{
     .name = "platform",
@@ -34,16 +39,14 @@ pub fn build(b: *std.build.Builder) !void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
 
-    // imgui-zig
-    imgui_build.link(exe, "imgui-zig/");
-    imgui_build.linkImpl(exe, "wgpu", "imgui-zig/");
-    exe.addPackage(imgui_pkg);
-
     // dawn-zig
-    if (false) { // TODO: check if webgpu_dawn build exists
-        exe.addLibraryPath(".");
+    if (std.fs.cwd().access("dawn-zig/zig-out", .{})) |_| { // don't build dawn when dawn binary is available
+        std.debug.print("Using webgpu_dawn library from 'dawn-zig/zig-out/lib'\n", .{});
+        exe.addLibraryPath("dawn-zig/zig-out/lib");
         exe.linkSystemLibrary("webgpu_dawn");
-    } else {
+        exe.addIncludePath("dawn-zig/dawn/include");
+        exe.addIncludePath("dawn-zig/dawn-gen/include");
+    } else |_| {
         dawn_build.link(exe, .{
             .enable_d3d12 = false,
             .enable_metal = false,
@@ -56,6 +59,12 @@ pub fn build(b: *std.build.Builder) !void {
         }, "dawn-zig/");
     }
     exe.addPackage(webgpu_pkg);
+
+    // imgui-zig
+    imgui_build.link(exe, "imgui-zig/");
+    imgui_build.linkImpl(exe, "wgpu", "imgui-zig/");
+    exe.addPackage(imgui_pkg);
+    exe.addPackage(imgui_impl_wgpu_pkg);
 
     // platform
     switch (target.os_tag orelse @import("builtin").target.os.tag) {
