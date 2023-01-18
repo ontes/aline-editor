@@ -1,16 +1,12 @@
 const std = @import("std");
 const math = @import("math");
-const platform = @import("platform");
-const render = @import("render");
 
-const editor = @import("editor.zig");
-const Drawing = @import("Drawing.zig");
-const Selection = @import("Selection.zig");
-const properties = @import("properties.zig");
+const Image = @import("Image.zig");
+const ImageSelection = @import("ImageSelection.zig");
 const snapping = @import("snapping.zig");
-const input = @import("input.zig");
+const canvas = @import("canvas.zig");
 
-const default_style = Drawing.Style{
+const default_style = Image.PathStyle{
     .stroke = .{ .width = 2, .cap = .round },
     .fill_color = .{ 0.5, 1, 0.5, 1 },
     .stroke_color = .{ 0, 0, 0, 1 },
@@ -24,25 +20,13 @@ pub const AnyOperation = union(enum) {
     Remove: Remove,
     ChangeAngle: ChangeAngle,
 
-    pub fn isGrabbed(op: AnyOperation) bool {
-        return switch (op) {
-            inline else => |comptime_op| comptime_op.isGrabbed(),
-        };
-    }
-
-    pub fn onEvent(op: *AnyOperation, event: platform.Event) !void {
-        return switch (op.*) {
-            inline else => |*comptime_op| comptime_op.onEvent(event),
-        };
-    }
-
-    pub fn apply(op: AnyOperation, sel: Selection) !Selection {
+    pub fn apply(op: AnyOperation, sel: ImageSelection) !ImageSelection {
         return switch (op) {
             inline else => |comptime_op| comptime_op.apply(sel),
         };
     }
 
-    pub fn generateHelper(op: AnyOperation, sel: Selection, gen: anytype) !void {
+    pub fn generateHelper(op: AnyOperation, sel: ImageSelection, gen: anytype) !void {
         return switch (op) {
             inline else => |comptime_op| comptime_op.generateHelper(sel, gen),
         };
@@ -50,121 +34,93 @@ pub const AnyOperation = union(enum) {
 };
 
 pub const AddPoint = struct {
-    position: properties.Position,
-    style: Drawing.Style = default_style,
+    position: math.Vec2 = .{ 0, 0 },
+    style: Image.PathStyle = default_style,
 
-    pub fn init(sel: Selection) ?AddPoint {
+    pub fn init(sel: ImageSelection) ?AddPoint {
         if (!sel.isNothingSelected()) return null;
-
-        var position_prop = properties.Position{ .val = .{ 0, 0 } };
-        position_prop.beginGrab();
-        return .{ .position = position_prop };
+        return .{};
     }
 
-    pub fn isGrabbed(op: AddPoint) bool {
-        return op.position.isGrabbed();
-    }
-
-    pub fn onEvent(op: *AddPoint, event: platform.Event) !void {
-        try op.position.onEvent(event);
-    }
-
-    pub fn apply(op: AddPoint, sel: Selection) !Selection {
+    pub fn apply(op: AddPoint, sel: ImageSelection) !ImageSelection {
         var out = try sel.cloneWithNothingSelected();
-        try out.drawing.addPoint(op.position.val, op.style);
-        try out.selectNode(@intCast(u32, sel.drawing.entries.len), 0);
+        try out.image.addPoint(op.position, op.style);
+        try out.selectNode(@intCast(u32, sel.image.entries.len), 0);
         return out;
     }
 
-    pub fn generateHelper(op: AddPoint, _: Selection, gen: anytype) !void {
-        var pass = input.wideStroke().generator(gen).begin();
-        try pass.end(op.position.val, null);
+    pub fn generateHelper(op: AddPoint, _: ImageSelection, gen: anytype) !void {
+        var pass = canvas.wideStroke().generator(gen).begin();
+        try pass.end(op.position, null);
     }
 };
 
 pub const Append = struct {
-    position: properties.Position,
+    position: math.Vec2,
     angle: f32 = 0,
+    _pos_a: math.Vec2,
 
-    pub fn init(sel: Selection) ?Append {
+    pub fn init(sel: ImageSelection) ?Append {
         if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
         const index = sel.intervals.items(.index)[0];
-        const path = sel.drawing.getPath(index);
+        const path = sel.image.getPath(index);
         const interval = sel.intervals.items(.interval)[0];
         if (!interval.isLooseEnd(path)) return null;
-
-        var position_prop = properties.Position{ .val = path.positions[interval.a] };
-        position_prop.beginGrab();
-        return .{ .position = position_prop };
+        const pos_a = sel.image.getPath(index).positions[interval.a];
+        return .{ ._pos_a = pos_a, .position = pos_a };
     }
 
-    pub fn isGrabbed(op: Append) bool {
-        return op.position.isGrabbed();
-    }
-
-    pub fn onEvent(op: *Append, event: platform.Event) !void {
-        try op.position.onEvent(event);
-    }
-
-    pub fn apply(op: Append, sel: Selection) !Selection {
+    pub fn apply(op: Append, sel: ImageSelection) !ImageSelection {
         const index = sel.intervals.items(.index)[0];
         const interval = sel.intervals.items(.interval)[0];
 
         var out = try sel.cloneWithNothingSelected();
         if (interval.a == 0)
-            out.drawing.reversePath(index);
-        if (snapping.snapToLooseEnd(sel.drawing, op.position.val)) |res| {
+            out.image.reversePath(index);
+        if (snapping.snapToLooseEnd(sel.image, op.position)) |res| {
             if (res.index == index) {
                 if (res.node != interval.a)
-                    out.drawing.loopPath(index, op.angle);
+                    out.image.loopPath(index, op.angle);
             } else {
                 if (res.node != 0)
-                    out.drawing.reversePath(res.index);
-                out.drawing.joinPaths(index, res.index, op.angle);
+                    out.image.reversePath(res.index);
+                out.image.joinPaths(index, res.index, op.angle);
             }
         } else {
-            try out.drawing.appendPoint(index, op.position.val, op.angle);
-            try out.selectNode(index, out.drawing.getLen(index) - 1);
+            try out.image.appendPoint(index, op.position, op.angle);
+            try out.selectNode(index, out.image.pathLen(index) - 1);
         }
         return out;
     }
 
-    pub fn generateHelper(op: Append, sel: Selection, gen: anytype) !void {
+    pub fn generateHelper(op: Append, sel: ImageSelection, gen: anytype) !void {
         const index = sel.intervals.items(.index)[0];
         const interval = sel.intervals.items(.interval)[0];
 
         try math.Arc.generate(.{
-            .pos_a = sel.drawing.getPath(index).positions[interval.a],
-            .pos_b = if (snapping.snapToLooseEnd(sel.drawing, op.position.val)) |res|
-                sel.drawing.getPositions(res.index)[res.node]
-            else
-                op.position.val,
-        }, input.standardStroke().generator(gen));
+            .pos_a = sel.image.getPath(index).positions[interval.a],
+            .pos_b = if (snapping.snapToLooseEnd(sel.image, op.position)) |res| sel.image.getPositions(res.index)[res.node] else op.position,
+            .angle = op.angle,
+        }, canvas.stroke().generator(gen));
     }
 };
 
 pub const Connect = struct {
     angle: f32 = 0,
+    _pos_a: math.Vec2,
+    _pos_b: math.Vec2,
 
-    pub fn init(sel: Selection) ?Connect {
+    pub fn init(sel: ImageSelection) ?Connect {
         if (!(sel.loops.items.len == 0 and sel.intervals.len == 2)) return null;
-        if (!sel.intervals.items(.interval)[0].isLooseEnd(sel.drawing.getPath(sel.intervals.items(.index)[0]))) return null;
-        if (!sel.intervals.items(.interval)[1].isLooseEnd(sel.drawing.getPath(sel.intervals.items(.index)[1]))) return null;
-        return .{};
+        const path_a = sel.image.getPath(sel.intervals.items(.index)[0]);
+        const path_b = sel.image.getPath(sel.intervals.items(.index)[1]);
+        const interval_a = sel.intervals.items(.interval)[0];
+        const interval_b = sel.intervals.items(.interval)[1];
+        if (!interval_a.isLooseEnd(path_a) or !interval_b.isLooseEnd(path_b)) return null;
+        return .{ ._pos_a = path_a.positions[interval_a.a], ._pos_b = path_b.positions[interval_b.a] };
     }
 
-    pub fn isGrabbed(op: Connect) bool {
-        _ = op;
-        return false; // TODO
-    }
-
-    pub fn onEvent(op: *Connect, event: platform.Event) !void {
-        _ = op;
-        _ = event;
-        // TODO
-    }
-
-    pub fn apply(op: Connect, sel: Selection) !Selection {
+    pub fn apply(op: Connect, sel: ImageSelection) !ImageSelection {
         var index0 = sel.intervals.items(.index)[0];
         var index1 = sel.intervals.items(.index)[1];
         var interval0 = sel.intervals.items(.interval)[0];
@@ -172,26 +128,26 @@ pub const Connect = struct {
 
         var out = try sel.cloneWithNothingSelected();
         if (index0 == index1) {
-            out.drawing.loopPath(index0, op.angle);
-            try out.selectSegment(index0, out.drawing.getLen(index0) - 1);
+            out.image.loopPath(index0, op.angle);
+            try out.selectSegment(index0, out.image.pathLen(index0) - 1);
         } else {
             if (index0 > index1) {
                 std.mem.swap(u32, &index0, &index1);
-                std.mem.swap(Selection.Interval, &interval0, &interval1);
+                std.mem.swap(ImageSelection.Interval, &interval0, &interval1);
             }
             if (interval0.a == 0)
-                out.drawing.reversePath(index0);
+                out.image.reversePath(index0);
             if (interval1.a != 0)
-                out.drawing.reversePath(index1);
+                out.image.reversePath(index1);
 
-            const join_index = out.drawing.getLen(index0) - 1;
-            out.drawing.joinPaths(index0, index1, op.angle);
+            const join_index = out.image.pathLen(index0) - 1;
+            out.image.joinPaths(index0, index1, op.angle);
             try out.selectSegment(index0, join_index);
         }
         return out;
     }
 
-    pub fn generateHelper(op: Connect, sel: Selection, gen: anytype) !void {
+    pub fn generateHelper(op: Connect, sel: ImageSelection, gen: anytype) !void {
         _ = op;
         _ = sel;
         _ = gen;
@@ -200,69 +156,49 @@ pub const Connect = struct {
 };
 
 pub const Move = struct {
-    offset: properties.Offset,
+    offset: math.Vec2 = .{ 0, 0 },
 
-    pub fn init(sel: Selection) ?Move {
+    pub fn init(sel: ImageSelection) ?Move {
         if (sel.isNothingSelected()) return null;
-
-        var offset_prop = properties.Offset{};
-        offset_prop.beginGrab();
-        return .{ .offset = offset_prop };
-    }
-
-    pub fn isGrabbed(op: Move) bool {
-        return op.offset.isGrabbed();
-    }
-
-    pub fn onEvent(op: *Move, event: platform.Event) !void {
-        try op.offset.onEvent(event);
+        return .{};
     }
 
     fn getMat(op: Move) math.Mat3 {
-        return math.mat3.translate(op.offset.val);
+        return math.mat3.translate(op.offset);
     }
 
-    pub fn apply(op: Move, sel: Selection) !Selection {
+    pub fn apply(op: Move, sel: ImageSelection) !ImageSelection {
         var out = try sel.clone();
         out.transformSelected(op.getMat());
         return out;
     }
 
-    pub fn generateHelper(op: Move, sel: Selection, gen: anytype) !void {
-        try sel.generateSelected(math.transformGenerator(op.getMat(), input.wideStroke().generator(gen)));
-        try sel.generateTransformEdges(op.getMat(), input.standardStroke().generator(gen));
+    pub fn generateHelper(op: Move, sel: ImageSelection, gen: anytype) !void {
+        try sel.generateSelected(math.transformGenerator(op.getMat(), canvas.wideStroke().generator(gen)));
+        try sel.generateTransformEdges(op.getMat(), canvas.stroke().generator(gen));
     }
 };
 
 pub const Remove = struct {
-    pub fn init(sel: Selection) ?Remove {
+    pub fn init(sel: ImageSelection) ?Remove {
         if (sel.isNothingSelected()) return null;
         return .{};
     }
 
-    pub fn isGrabbed(_: Remove) bool {
-        return false; // TODO
-    }
-
-    pub fn onEvent(_: *Remove, event: platform.Event) !void {
-        _ = event;
-        // TODO
-    }
-
-    pub fn apply(_: Remove, sel: Selection) !Selection {
-        var out = Selection.init(sel.drawing.allocator);
-        var it = sel.drawing.pathIterator();
+    pub fn apply(_: Remove, sel: ImageSelection) !ImageSelection {
+        var out = ImageSelection.init(sel.image.allocator);
+        var it = sel.image.pathIterator();
         while (it.next()) |path| {
             if (path.isLooped()) {
-                try addUnselectedLoop(&out.drawing, sel, it.getIndex());
+                try addUnselectedLoop(&out.image, sel, it.getIndex());
             } else {
-                try addUnselectedInterval(&out.drawing, sel, it.getIndex(), .{ .a = 0, .b = path.len() - 1 });
+                try addUnselectedInterval(&out.image, sel, it.getIndex(), .{ .a = 0, .b = path.len() - 1 });
             }
         }
         return out;
     }
 
-    fn addUnselectedLoop(out_drawing: *Drawing, sel: Selection, index: u32) !void {
+    fn addUnselectedLoop(out_drawing: *Image, sel: ImageSelection, index: u32) !void {
         for (sel.loops.items) |sel_index| {
             if (sel_index == index)
                 return;
@@ -276,8 +212,8 @@ pub const Remove = struct {
                 }
             }
         }
-        const path = sel.drawing.getPath(index);
-        try out_drawing.addPoint(path.positions[0], sel.drawing.entries.items(.style)[index]);
+        const path = sel.image.getPath(index);
+        try out_drawing.addPoint(path.positions[0], sel.image.entries.items(.style)[index]);
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i: u32 = 0;
         while (i + 1 < path.len()) : (i += 1)
@@ -285,7 +221,7 @@ pub const Remove = struct {
         out_drawing.loopPath(new_index, path.angles[i]);
     }
 
-    fn addUnselectedInterval(out_drawing: *Drawing, sel: Selection, index: u32, interval: Selection.Interval) !void {
+    fn addUnselectedInterval(out_drawing: *Image, sel: ImageSelection, index: u32, interval: ImageSelection.Interval) !void {
         for (sel.intervals.items(.index)) |sel_index, i| {
             if (sel_index == index) {
                 const sel_interval = sel.intervals.items(.interval)[i];
@@ -298,15 +234,15 @@ pub const Remove = struct {
                 }
             }
         }
-        const path = sel.drawing.getPath(index);
-        try out_drawing.addPoint(path.positions[interval.a], sel.drawing.entries.items(.style)[index]);
+        const path = sel.image.getPath(index);
+        try out_drawing.addPoint(path.positions[interval.a], sel.image.entries.items(.style)[index]);
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i = interval.a;
-        while (i != interval.b) : (i = path.next(i))
-            try out_drawing.appendPoint(new_index, path.positions[path.next(i)], path.angles[i]);
+        while (i != interval.b) : (i = path.nextNode(i))
+            try out_drawing.appendPoint(new_index, path.positions[path.nextNode(i)], path.angles[i]);
     }
 
-    pub fn generateHelper(_: Remove, sel: Selection, gen: anytype) !void {
+    pub fn generateHelper(_: Remove, sel: ImageSelection, gen: anytype) !void {
         _ = sel;
         _ = gen;
         // TODO
@@ -314,39 +250,31 @@ pub const Remove = struct {
 };
 
 pub const ChangeAngle = struct {
-    angle: properties.Angle,
+    angle: f32,
+    _pos_a: math.Vec2, // helpers
+    _pos_b: math.Vec2,
 
-    pub fn init(sel: Selection) ?ChangeAngle {
+    pub fn init(sel: ImageSelection) ?ChangeAngle {
         if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
-        const path = sel.drawing.getPath(sel.intervals.items(.index)[0]);
+        const path = sel.image.getPath(sel.intervals.items(.index)[0]);
         const interval = sel.intervals.items(.interval)[0];
         if (!interval.isSingleSegment(path)) return null;
-
-        var angle_prop = properties.Angle{ .val = path.angles[interval.a] };
-        angle_prop.beginGrab();
-        return .{ .angle = angle_prop };
+        const arc = path.getArc(interval.a);
+        return .{ .angle = arc.angle, ._pos_a = arc.pos_a, ._pos_b = arc.pos_b };
     }
 
-    pub fn isGrabbed(op: ChangeAngle) bool {
-        return op.angle.isGrabbed();
-    }
-
-    pub fn onEvent(op: *ChangeAngle, event: platform.Event) !void {
-        try op.angle.onEvent(event);
-    }
-
-    pub fn apply(op: ChangeAngle, sel: Selection) !Selection {
+    pub fn apply(op: ChangeAngle, sel: ImageSelection) !ImageSelection {
         var out = try sel.clone();
         const interval = sel.intervals.items(.interval)[0];
-        out.drawing.getAngles(sel.intervals.items(.index)[0])[interval.a] = op.angle.val;
+        out.image.getAngles(sel.intervals.items(.index)[0])[interval.a] = op.angle;
         return out;
     }
 
-    pub fn generateHelper(op: ChangeAngle, sel: Selection, gen: anytype) !void {
-        const path = sel.drawing.getPath(sel.intervals.items(.index)[0]);
+    pub fn generateHelper(op: ChangeAngle, sel: ImageSelection, gen: anytype) !void {
+        const path = sel.image.getPath(sel.intervals.items(.index)[0]);
         const interval = sel.intervals.items(.interval)[0];
         var arc = path.getArc(interval.a);
-        arc.angle = op.angle.val;
-        try arc.generate(input.standardStroke().generator(gen));
+        arc.angle = op.angle;
+        try arc.generate(canvas.stroke().generator(gen));
     }
 };

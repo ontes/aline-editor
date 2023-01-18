@@ -1,21 +1,21 @@
 const std = @import("std");
 const math = @import("math");
 
-const input = @import("input.zig");
-const Drawing = @import("Drawing.zig");
+const canvas = @import("canvas.zig");
+const Image = @import("Image.zig");
 
 fn distToPoint(pos: math.Vec2, point: math.Vec2) f32 {
     return math.vec2.abs(pos - point);
 }
 pub fn shouldSnapToPoint(pos: math.Vec2, point: math.Vec2) bool {
-    return distToPoint(pos, point) < input.snapDist();
+    return distToPoint(pos, point) < canvas.snapDist();
 }
 
 fn distToArc(pos: math.Vec2, arc: math.Arc) f32 {
     return math.vec2.abs(arc.pos_a - arc.pos_b) * @fabs(@tan(arc.angleOnPoint(pos) / 2) - @tan(arc.angle / 2)) / 2;
 }
 pub fn shouldSnapToArc(pos: math.Vec2, arc: math.Arc) bool {
-    return distToArc(pos, arc) < input.snapDist();
+    return distToArc(pos, arc) < canvas.snapDist();
 }
 
 const SelectResult = struct {
@@ -26,10 +26,10 @@ const SelectResult = struct {
         loop: void,
     },
 };
-pub fn select(drawing: Drawing, pos: math.Vec2) ?SelectResult {
+pub fn select(image: Image, pos: math.Vec2) ?SelectResult {
     var result: ?SelectResult = null;
-    var best_dist: f32 = input.snapDist();
-    var it = drawing.reversePathIterator();
+    var best_dist: f32 = canvas.snapDist();
+    var it = image.reversePathIterator();
     while (it.next()) |path| {
         var node: u32 = 0;
         while (node < path.len()) : (node += 1) {
@@ -58,10 +58,10 @@ const LooseEndResult = struct {
     index: u32,
     node: u32,
 };
-pub fn snapToLooseEnd(drawing: Drawing, pos: math.Vec2) ?LooseEndResult {
+pub fn snapToLooseEnd(image: Image, pos: math.Vec2) ?LooseEndResult {
     var result: ?LooseEndResult = null;
-    var best_dist: f32 = input.snapDist();
-    var it = drawing.pathIterator();
+    var best_dist: f32 = canvas.snapDist();
+    var it = image.pathIterator();
     while (it.next()) |path| {
         if (!path.isLooped()) {
             for ([_]u32{ 0, path.len() - 1 }) |node| {

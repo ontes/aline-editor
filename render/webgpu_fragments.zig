@@ -150,7 +150,7 @@ pub const Context = struct {
         context.swapchain = webgpu_utils.createSwapchain(context.device, context.surface, size);
     }
 
-    pub fn draw(context: Context, comptime draw_fn: fn (pass: *webgpu.RenderPassEncoder) void) void {
+    pub fn render(context: Context, comptime draw_fn: fn (pass: *webgpu.RenderPassEncoder) void) void {
         const command_encoder = context.device.createCommandEncoder(&.{});
         const pass = command_encoder.beginRenderPass(&.{
             .color_attachment_count = 1,
@@ -256,7 +256,7 @@ pub const Buffer = struct {
         }) else null;
     }
 
-    pub fn draw(buffer: Buffer, pass: *webgpu.RenderPassEncoder) void {
+    pub fn render(buffer: Buffer, pass: *webgpu.RenderPassEncoder) void {
         if (buffer.bind_group) |bind_group| {
             pass.setPipeline(buffer.context.pipeline);
             pass.setBindGroup(0, bind_group, 0, &[0]u32{});

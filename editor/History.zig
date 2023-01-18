@@ -1,14 +1,14 @@
 const std = @import("std");
-const Selection = @import("Selection.zig");
+const ImageSelection = @import("ImageSelection.zig");
 
 const History = @This();
 
 level: u32 = 0,
 max_len: u32 = std.math.maxInt(u32),
-entries: std.ArrayList(Selection),
+entries: std.ArrayList(ImageSelection),
 
 pub fn init(allocator: std.mem.Allocator) History {
-    return .{ .entries = std.ArrayList(Selection).init(allocator) };
+    return .{ .entries = std.ArrayList(ImageSelection).init(allocator) };
 }
 
 pub fn deinit(history: History) void {
@@ -17,15 +17,15 @@ pub fn deinit(history: History) void {
     history.entries.deinit();
 }
 
-pub fn get(history: History) *Selection {
+pub fn get(history: History) *ImageSelection {
     return &history.entries.items[history.entries.items.len - 1 - history.level];
 }
 
-pub fn getPrev(history: History) *Selection {
+pub fn getPrev(history: History) *ImageSelection {
     return &history.entries.items[history.entries.items.len - 2 - history.level];
 }
 
-pub fn add(history: *History, sel: Selection) !void {
+pub fn add(history: *History, sel: ImageSelection) !void {
     while (history.level > 0) : (history.level -= 1)
         history.entries.pop().deinit();
 
