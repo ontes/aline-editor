@@ -27,6 +27,9 @@ pub fn handleEvent(event: common.Event) void {
             if (toImguiModKey(key)) |imgui_key|
                 io.addKeyEvent(imgui_key, event == .key_press);
         },
+        .text_input => |text| {
+            io.addInputCharactersUTF8(text.ptr);
+        },
         .mouse_move => |pos| {
             io.addMousePosEvent(@intToFloat(f32, pos[0]), @intToFloat(f32, pos[1]));
         },

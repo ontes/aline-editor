@@ -17,6 +17,19 @@ pub const KeyCode = u8;
 
 pub const GC = opaque {};
 pub const Display = opaque {};
+pub const XrmDatabase = opaque {};
+pub const IM = opaque {
+    pub const preeditArea = @as(c_long, 0x0001);
+    pub const preeditCallbacks = @as(c_long, 0x0002);
+    pub const preeditPosition = @as(c_long, 0x0004);
+    pub const preeditNothing = @as(c_long, 0x0008);
+    pub const preeditNone = @as(c_long, 0x0010);
+    pub const statusArea = @as(c_long, 0x0100);
+    pub const statusCallbacks = @as(c_long, 0x0200);
+    pub const statusNothing = @as(c_long, 0x0400);
+    pub const statusNone = @as(c_long, 0x0800);
+};
+pub const IC = opaque {};
 
 pub const Bool = enum(c_int) {
     false = 0,
@@ -632,6 +645,15 @@ pub const WindowAttributes = extern struct {
     screen: *Screen,
 };
 
+pub const clientWindow = "clientWindow";
+pub const inputStyle = "inputStyle";
+pub const focusWindow = "focusWindow";
+pub const resourceName = "resourceName";
+pub const resourceClass = "resourceClass";
+pub const geometryCallback = "geometryCallback";
+pub const destroyCallback = "destroyCallback";
+pub const filterEvents = "filterEvents";
+
 extern fn XOpenDisplay(display_name: ?[*:0]const u8) ?*Display;
 pub const openDisplay = XOpenDisplay;
 extern fn XCloseDisplay(display: *Display) void;
@@ -682,3 +704,18 @@ extern fn XFree(data: *anyopaque) void;
 pub const free = XFree;
 extern fn XInitThreads() Status;
 pub const initThreads = XInitThreads;
+extern fn XFilterEvent(event: *Event, window: Window) Bool;
+pub const filterEvent = XFilterEvent;
+extern fn XLookupString(event: *KeyEvent, buffer_return: [*]u8, bytes_buffer: c_int, keysym_return: ?*KeySym, status_return: ?*Status) c_int;
+pub const lookupString = XLookupString;
+
+extern fn Xutf8LookupString(ic: *IC, event: *KeyEvent, buffer_return: [*]u8, bytes_buffer: c_int, keysym_return: ?*KeySym, status_return: ?*Status) c_int;
+pub const utf8LookupString = Xutf8LookupString;
+extern fn XOpenIM(display: *Display, db: ?*XrmDatabase, res_name: ?[*:0]u8, res_class: ?[*:0]u8) ?*IM;
+pub const openIM = XOpenIM;
+extern fn XCloseIM(im: *IM) Status;
+pub const closeIM = XCloseIM;
+extern fn XCreateIC(im: *IM, ...) ?*IC;
+pub const createIC = XCreateIC;
+extern fn XDestroyIC(ic: *IC) void;
+pub const destroyIC = XDestroyIC;

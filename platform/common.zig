@@ -3,6 +3,7 @@ pub const err = error.PlatformError;
 pub const Event = union(enum) {
     key_press: Key,
     key_release: Key,
+    text_input: [:0]const u8,
     mouse_move: [2]i32,
     mouse_scroll: i8,
     mouse_enter: void,

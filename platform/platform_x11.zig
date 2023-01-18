@@ -120,6 +120,7 @@ pub const Window = struct {
 };
 
 pub fn pollEvents(comptime callback: fn (event: common.Event, window: Window) anyerror!void) !void {
+    var is_repeated = false;
     while (x11.pending(display) > 0) {
         var event: x11.Event = undefined;
         x11.nextEvent(display, &event);
@@ -127,8 +128,17 @@ pub fn pollEvents(comptime callback: fn (event: common.Event, window: Window) an
 
         switch (event.type) {
             .key_press => {
-                if (keysymToKey(x11.lookupKeysym(&event.key, 0))) |key|
-                    try callback(.{ .key_press = key }, window);
+                if (!is_repeated) {
+                    if (keysymToKey(x11.lookupKeysym(&event.key, 0))) |key|
+                        try callback(.{ .key_press = key }, window);
+                }
+                if (x11.filterEvent(&event, 0) == .false) {
+                    var buffer = [1]u8{0};
+                    const buffer_len = x11.lookupString(&event.key, &buffer, 1, null, null);
+                    if (buffer_len == 1)
+                        try callback(.{ .text_input = &.{buffer[0]} }, window);
+                }
+                is_repeated = false;
             },
             .key_release => {
                 // skip auto-repeated key events
@@ -136,12 +146,13 @@ pub fn pollEvents(comptime callback: fn (event: common.Event, window: Window) an
                     var next_event: x11.Event = undefined;
                     x11.peekEvent(display, &next_event);
                     if (next_event.type == .key_press and next_event.key.keycode == event.key.keycode) {
-                        x11.nextEvent(display, &next_event);
-                        continue;
+                        is_repeated = true;
                     }
                 }
-                if (keysymToKey(x11.lookupKeysym(&event.key, 0))) |key|
-                    try callback(.{ .key_release = key }, window);
+                if (!is_repeated) {
+                    if (keysymToKey(x11.lookupKeysym(&event.key, 0))) |key|
+                        try callback(.{ .key_release = key }, window);
+                }
             },
             .button_press => {
                 if (buttonToKey(event.button.button)) |key|
