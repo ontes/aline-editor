@@ -425,7 +425,7 @@ pub const Rect = extern struct {
 
 pub const WindowProc = fn (window: *Window, message_type: MessageType, w_param: usize, l_param: isize) callconv(.C) isize;
 
-extern fn CreateWindowExA(ex_style: WindowStyleEx, class_name: [*:0]const u8, window_name: [*:0]const u8, style: WindowStyle, x: c_int, y: c_int, width: c_int, height: c_int, window_parent: ?*Window, menu: *Menu, instance: *Instance, userdata: ?*anyopaque) ?*Window;
+extern fn CreateWindowExA(ex_style: WindowStyleEx, class_name: ?[*:0]const u8, window_name: ?[*:0]const u8, style: WindowStyle, x: c_int, y: c_int, width: c_int, height: c_int, window_parent: ?*Window, menu: ?*Menu, instance: ?*Instance, param: ?*anyopaque) ?*Window;
 pub const createWindowEx = CreateWindowExA;
 extern fn DestroyWindow(window: *Window) Status;
 pub const destroyWindow = DestroyWindow;

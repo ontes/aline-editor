@@ -24,7 +24,7 @@ var message_queue: std.ArrayList(Message) = undefined;
 
 pub fn init() !void {
     message_queue = std.ArrayList(Message).init(std.heap.c_allocator);
-    window_class.instance = @ptrCast(win32.Instance, win32.getModuleHandle(null).?);
+    window_class.instance = @ptrCast(*win32.Instance, win32.getModuleHandle(null).?);
     if (win32.registerClassEx(&window_class) == 0) return common.err;
 }
 
@@ -47,7 +47,7 @@ pub const Window = struct {
             @intCast(c_int, size[0]),
             @intCast(c_int, size[1]),
             null,
-            0,
+            null,
             window_class.instance,
             null,
         ) orelse return common.err;
@@ -183,16 +183,16 @@ fn keycodeToKey(w_param: usize) ?common.Key {
         0x58 => .x,
         0x59 => .y,
         0x5a => .z,
-        0x30 => .n0,
-        0x31 => .n1,
-        0x32 => .n2,
-        0x33 => .n3,
-        0x34 => .n4,
-        0x35 => .n5,
-        0x36 => .n6,
-        0x37 => .n7,
-        0x38 => .n8,
-        0x39 => .n9,
+        0x30 => .n_0,
+        0x31 => .n_1,
+        0x32 => .n_2,
+        0x33 => .n_3,
+        0x34 => .n_4,
+        0x35 => .n_5,
+        0x36 => .n_6,
+        0x37 => .n_7,
+        0x38 => .n_8,
+        0x39 => .n_9,
         0x0d => .enter,
         0x1b => .escape,
         0x08 => .backspace,
