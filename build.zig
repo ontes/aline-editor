@@ -6,19 +6,9 @@ const webgpu_pkg = std.build.Pkg{
     .name = "webgpu",
     .source = .{ .path = "dawn-zig/webgpu.zig" },
 };
-const imgui_pkg = std.build.Pkg{
-    .name = "imgui",
-    .source = .{ .path = "imgui-zig/imgui.zig" },
-};
-const imgui_impl_wgpu_pkg = std.build.Pkg{
-    .name = "imgui_impl_wgpu",
-    .source = .{ .path = "imgui-zig/imgui_impl_wgpu.zig" },
-    .dependencies = &.{webgpu_pkg},
-};
 const platform_pkg = std.build.Pkg{
     .name = "platform",
     .source = .{ .path = "platform/platform.zig" },
-    .dependencies = &.{imgui_pkg},
 };
 const math_pkg = std.build.Pkg{
     .name = "math",
@@ -28,6 +18,15 @@ const render_pkg = std.build.Pkg{
     .name = "render",
     .source = .{ .path = "render/render.zig" },
     .dependencies = &.{ webgpu_pkg, platform_pkg, math_pkg },
+};
+const imgui_pkg = std.build.Pkg{
+    .name = "imgui",
+    .source = .{ .path = "imgui-zig/imgui.zig" },
+};
+const imgui_impl_wgpu_pkg = std.build.Pkg{
+    .name = "imgui_impl_wgpu",
+    .source = .{ .path = "imgui-zig/imgui_impl_wgpu.zig" },
+    .dependencies = &.{webgpu_pkg},
 };
 
 pub fn build(b: *std.build.Builder) !void {

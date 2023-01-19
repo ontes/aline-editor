@@ -8,5 +8,3 @@ pub usingnamespace switch (@import("builtin").target.os.tag) {
     .linux => platform_x11,
     else => @compileError("Target OS isn't supported"),
 };
-
-pub const imgui_impl = @import("imgui_impl.zig");

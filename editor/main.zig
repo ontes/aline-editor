@@ -2,8 +2,6 @@ const std = @import("std");
 const platform = @import("platform");
 const render = @import("render");
 const webgpu = @import("webgpu");
-const imgui = @import("imgui");
-const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 
 const editor = @import("editor.zig");
 const canvas = @import("canvas.zig");
@@ -31,7 +29,7 @@ fn init(allocator: std.mem.Allocator) !void {
         buffer.* = render.Buffer.init(&context, allocator);
 
     try editor.init(allocator);
-    input_gui.init(context);
+    input_gui.init(context.device);
 
     time = std.time.nanoTimestamp();
 }
@@ -53,38 +51,31 @@ fn onFrame() !void {
 
     try input_gui.onFrame();
 
-    var should_render = true; // TODO detect when ImGui want's to render
-
     if (editor.should_draw_canvas) {
         buffers[0].clear();
         try canvas.draw(&buffers[0]);
         buffers[0].flush();
         editor.should_draw_canvas = false;
-        should_render = true;
     }
     if (editor.should_draw_image) {
         buffers[1].clear();
         try editor.drawImage(&buffers[1]);
         buffers[1].flush();
         editor.should_draw_image = false;
-        should_render = true;
     }
     if (editor.should_draw_helper) {
         buffers[2].clear();
         try editor.drawHelper(&buffers[2]);
         buffers[2].flush();
         editor.should_draw_helper = false;
-        should_render = true;
     }
     if (editor.should_update_transform) {
         for (buffers) |*buffer|
             buffer.setTransform(canvas.transform());
         editor.should_update_transform = false;
-        should_render = true;
     }
 
-    if (should_render)
-        context.render(onRender);
+    context.render(onRender);
 
     const frame_time = std.time.nanoTimestamp() - time;
     if (frame_time < desired_frame_time)
@@ -96,7 +87,7 @@ fn onRender(pass: *webgpu.RenderPassEncoder) void {
     for (buffers) |buffer| {
         buffer.render(pass);
     }
-    imgui_impl_wgpu.renderDrawData(imgui.getDrawData().?, pass);
+    input_gui.render(pass);
 }
 
 fn onEvent(event: platform.Event, _: platform.Window) !void {
