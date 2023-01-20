@@ -56,7 +56,7 @@ pub const Offset = struct {
     pub fn onEvent(grab: Offset, event: platform.Event) !bool {
         switch (event) {
             .mouse_move => {
-                const multiplier: f32 = if (input.isShiftPressed()) 0.1 else 1;
+                const multiplier: f32 = if (input.shift_pressed) 0.1 else 1;
                 grab.offset.* += canvas.mouseOffset() * math.vec2.splat(multiplier);
                 return true;
             },

@@ -1,57 +1,150 @@
-const std = @import("std");
 const math = @import("math");
 const platform = @import("platform");
 
-var window_size: [2]u32 = .{ 0, 0 };
-var mouse_pos: [2]i32 = .{ 0, 0 };
+const canvas = @import("canvas.zig");
+const editor = @import("editor.zig");
+const operations = @import("operations.zig");
+const grabs = @import("grabs.zig");
+const snapping = @import("snapping.zig");
 
-var mouse_middle_pressed: bool = false;
-var ctrl_pressed: bool = false;
-var shift_pressed: bool = false;
-var alt_pressed: bool = false;
+pub var ctrl_pressed: bool = false;
+pub var shift_pressed: bool = false;
+pub var alt_pressed: bool = false;
+var mouse_click_pos: ?math.Vec2 = null;
 
-pub fn onEvent(event: platform.Event) void {
+pub fn onEvent(event: platform.Event, ui_grabbed: bool) !void {
     switch (event) {
-        .key_press, .key_release => |key| {
-            const pressed = (event == .key_press);
-            switch (key) {
-                .left_ctrl, .right_ctrl => ctrl_pressed = pressed,
-                .left_shift, .right_shift => shift_pressed = pressed,
-                .left_alt, .right_alt => alt_pressed = pressed,
-                .mouse_middle => mouse_middle_pressed = pressed,
-                else => {},
-            }
+        .key_press => |key| switch (key) {
+            .mouse_left => {
+                if (editor.grab) |_| {
+                    editor.grab = null;
+                    try editor.updateOperation();
+                } else if (!ui_grabbed) {
+                    mouse_click_pos = canvas.mousePos();
+                }
+            },
+            .mouse_right => {
+                if (editor.grab) |grab| {
+                    grab.cancel();
+                    editor.grab = null;
+                    try editor.updateOperation();
+                }
+            },
+            .left_ctrl, .right_ctrl => ctrl_pressed = true,
+            .left_shift, .right_shift => shift_pressed = true,
+            .left_alt, .right_alt => alt_pressed = true,
+            else => {},
         },
-        .window_resize => |size| window_size = size,
-        .mouse_move => |pos| mouse_pos = pos,
+        .key_release => |key| switch (key) {
+            .mouse_left => {
+                if (mouse_click_pos != null) {
+                    if (editor.grab == null and !ui_grabbed) {
+                        if (!shift_pressed)
+                            editor.history.get().deselectAll();
+                        const mouse_pos = canvas.mousePos();
+                        if (snapping.shouldSnapToPoint(mouse_pos, mouse_click_pos.?)) {
+                            try selectPoint(mouse_click_pos.?);
+                        } else {
+                            try selectRect(@min(mouse_pos, mouse_click_pos.?), @max(mouse_pos, mouse_click_pos.?));
+                        }
+                        editor.should_draw_helper = true;
+                    }
+                    mouse_click_pos = null;
+                }
+            },
+            .left_ctrl, .right_ctrl => ctrl_pressed = false,
+            .left_shift, .right_shift => shift_pressed = false,
+            .left_alt, .right_alt => alt_pressed = false,
+            .z => {
+                try editor.finishOperation();
+                if (ctrl_pressed and editor.history.undo()) {
+                    editor.should_draw_image = true;
+                    editor.should_draw_helper = true;
+                }
+            },
+            .y => {
+                try editor.finishOperation();
+                if (ctrl_pressed and editor.history.redo()) {
+                    editor.should_draw_image = true;
+                    editor.should_draw_helper = true;
+                }
+            },
+            .a => {
+                try editor.finishOperation();
+                if (ctrl_pressed) {
+                    try editor.history.get().selectAll();
+                    editor.should_draw_helper = true;
+                } else if (operations.AddPoint.init(editor.history.get().*)) |op| {
+                    try editor.setOperation(.{ .AddPoint = op });
+                    editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.AddPoint.position) };
+                } else if (operations.Append.init(editor.history.get().*)) |op| {
+                    try editor.setOperation(.{ .Append = op });
+                    editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.Append.position) };
+                }
+            },
+            .c => {
+                try editor.finishOperation();
+                if (operations.Connect.init(editor.history.get().*)) |op| {
+                    try editor.setOperation(.{ .Connect = op });
+                }
+            },
+            .g => {
+                try editor.finishOperation();
+                if (operations.Move.init(editor.history.get().*)) |op| {
+                    try editor.setOperation(.{ .Move = op });
+                    editor.grab = .{ .Offset = grabs.Offset.init(&editor.operation.?.Move.offset) };
+                }
+            },
+            .d => {
+                try editor.finishOperation();
+                if (operations.ChangeAngle.init(editor.history.get().*)) |op| {
+                    try editor.setOperation(.{ .ChangeAngle = op });
+                    editor.grab = .{ .Angle = grabs.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
+                }
+            },
+            .delete => {
+                try editor.finishOperation();
+                if (operations.Remove.init(editor.history.get().*)) |op|
+                    try editor.setOperation(.{ .Remove = op });
+            },
+            else => {},
+        },
         else => {},
     }
 }
 
-pub fn mousePos() math.Vec2 {
-    return .{
-        @intToFloat(f32, mouse_pos[0]) - @intToFloat(f32, window_size[0]) / 2,
-        @intToFloat(f32, window_size[1]) / 2 - @intToFloat(f32, mouse_pos[1]),
-    };
-}
-pub fn windowSize() math.Vec2 {
-    return .{ @intToFloat(f32, window_size[0]), @intToFloat(f32, window_size[1]) };
-}
-
-pub fn isCtrlPressed() bool {
-    return ctrl_pressed;
-}
-pub fn isShiftPressed() bool {
-    return shift_pressed;
-}
-pub fn isAltPressed() bool {
-    return alt_pressed;
-}
-pub fn isMouseMiddlePressed() bool {
-    return mouse_middle_pressed;
+fn selectPoint(pos: math.Vec2) !void {
+    const sel = editor.history.get();
+    if (snapping.select(sel.image, pos)) |s| {
+        if (ctrl_pressed) {
+            try sel.togglePath(s.index);
+        } else switch (s.val) {
+            .node => |node| try sel.toggleNode(s.index, node),
+            .segment => |segment| try sel.toggleSegment(s.index, segment),
+            .loop => try sel.togglePath(s.index),
+        }
+    }
 }
 
-pub fn standardTransform() math.Mat3 {
-    const scale = math.vec2.splat(2) / windowSize();
-    return math.mat3.scale(.{ scale[0], scale[1], 1 });
+fn selectRect(min_pos: math.Vec2, max_pos: math.Vec2) !void {
+    const sel = editor.history.get();
+    var it = sel.image.pathIterator();
+    while (it.next()) |path| {
+        var i: u32 = 0;
+        while (i < path.len()) : (i += 1) {
+            if (@reduce(.And, path.positions[i] >= min_pos) and
+                @reduce(.And, path.positions[i] <= max_pos) and
+                !sel.isSelectedNode(it.getIndex(), i))
+                try sel.selectNode(it.getIndex(), i);
+        }
+        i = 0;
+        while (i < path.angles.len) : (i += 1) {
+            const arc = path.getArc(i);
+            const arc_bounds = arc.boundingBox();
+            if (@reduce(.And, arc_bounds[0] >= min_pos) and
+                @reduce(.And, arc_bounds[1] <= max_pos) and
+                !sel.isSelectedSegment(it.getIndex(), i))
+                try sel.selectSegment(it.getIndex(), i);
+        }
+    }
 }

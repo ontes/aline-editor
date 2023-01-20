@@ -6,8 +6,7 @@ const webgpu = @import("webgpu");
 const editor = @import("editor.zig");
 const canvas = @import("canvas.zig");
 const input = @import("input.zig");
-const input_basic = @import("input_basic.zig");
-const input_gui = @import("input_gui.zig");
+const gui = @import("gui.zig");
 
 const desired_frame_time = 10 * std.time.ns_per_ms;
 
@@ -29,14 +28,14 @@ fn init(allocator: std.mem.Allocator) !void {
         buffer.* = render.Buffer.init(&context, allocator);
 
     try editor.init(allocator);
-    input_gui.init(context.device);
+    gui.init(context.device);
 
     time = std.time.nanoTimestamp();
 }
 
 fn deinit() void {
     editor.deinit();
-    input_gui.deinit();
+    gui.deinit();
 
     for (buffers) |*buffer|
         buffer.deinit();
@@ -49,7 +48,7 @@ fn deinit() void {
 fn onFrame() !void {
     try platform.pollEvents(onEvent);
 
-    try input_gui.onFrame();
+    try gui.onFrame();
 
     if (editor.should_draw_canvas) {
         buffers[0].clear();
@@ -87,7 +86,7 @@ fn onRender(pass: *webgpu.RenderPassEncoder) void {
     for (buffers) |buffer| {
         buffer.render(pass);
     }
-    input_gui.render(pass);
+    gui.render(pass);
 }
 
 fn onEvent(event: platform.Event, _: platform.Window) !void {
@@ -97,9 +96,8 @@ fn onEvent(event: platform.Event, _: platform.Window) !void {
         else => {},
     }
     try canvas.onEvent(event);
-    input.onEvent(event);
-    input_gui.onEvent(event);
-    try input_basic.onEvent(event, input_gui.isGrabbed());
+    gui.onEvent(event);
+    try input.onEvent(event, gui.isGrabbed());
     if (editor.grab) |grab| {
         if (try grab.onEvent(event))
             try editor.updateOperation();
