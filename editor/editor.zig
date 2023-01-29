@@ -56,8 +56,8 @@ pub fn setOperation(new_operation: operations.AnyOperation) !void {
     try updateOperation();
 }
 
-const select_color = [4]f32{ 1, 1, 0.25, 1 };
-const preview_color = [4]f32{ 1, 0.25, 0.25, 1 };
+const select_color = [4]f32{ 0.9, 0.9, 0, 1 };
+const preview_color = [4]f32{ 0.9, 0, 0, 1 };
 
 pub fn drawImage(buffer: *render.Buffer) !void {
     try history.get().image.draw(buffer);

@@ -6,9 +6,9 @@ const ImageSelection = @import("ImageSelection.zig");
 const snapping = @import("snapping.zig");
 const canvas = @import("canvas.zig");
 
-const default_style = Image.PathStyle{
+const default_properties = Image.PathProperties{
     .stroke = .{ .width = 2, .cap = .round },
-    .fill_color = .{ 0.5, 1, 0.5, 1 },
+    .fill_color = .{ 0.5, 0.5, 0.5, 1 },
     .stroke_color = .{ 0, 0, 0, 1 },
 };
 
@@ -35,7 +35,7 @@ pub const AnyOperation = union(enum) {
 
 pub const AddPoint = struct {
     position: math.Vec2 = .{ 0, 0 },
-    style: Image.PathStyle = default_style,
+    properties: Image.PathProperties = default_properties,
 
     pub fn init(sel: ImageSelection) ?AddPoint {
         if (!sel.isNothingSelected()) return null;
@@ -44,7 +44,7 @@ pub const AddPoint = struct {
 
     pub fn apply(op: AddPoint, sel: ImageSelection) !ImageSelection {
         var out = try sel.cloneWithNothingSelected();
-        try out.image.addPoint(op.position, op.style);
+        try out.image.addPoint(op.position, op.properties);
         try out.selectNode(@intCast(u32, sel.image.entries.len), 0);
         return out;
     }
@@ -84,7 +84,7 @@ pub const Append = struct {
             } else {
                 if (res.node != 0)
                     out.image.reversePath(res.index);
-                out.image.joinPaths(index, res.index, op.angle);
+                _ = out.image.joinPaths(index, res.index, op.angle);
             }
         } else {
             try out.image.appendPoint(index, op.position, op.angle);
@@ -121,29 +121,17 @@ pub const Connect = struct {
     }
 
     pub fn apply(op: Connect, sel: ImageSelection) !ImageSelection {
-        var index0 = sel.intervals.items(.index)[0];
-        var index1 = sel.intervals.items(.index)[1];
-        var interval0 = sel.intervals.items(.interval)[0];
-        var interval1 = sel.intervals.items(.interval)[1];
+        var index_a = sel.intervals.items(.index)[0];
+        var index_b = sel.intervals.items(.index)[1];
+        var interval_a = sel.intervals.items(.interval)[0];
+        var interval_b = sel.intervals.items(.interval)[1];
 
         var out = try sel.cloneWithNothingSelected();
-        if (index0 == index1) {
-            out.image.loopPath(index0, op.angle);
-            try out.selectSegment(index0, out.image.pathLen(index0) - 1);
-        } else {
-            if (index0 > index1) {
-                std.mem.swap(u32, &index0, &index1);
-                std.mem.swap(ImageSelection.Interval, &interval0, &interval1);
-            }
-            if (interval0.a == 0)
-                out.image.reversePath(index0);
-            if (interval1.a != 0)
-                out.image.reversePath(index1);
-
-            const join_index = out.image.pathLen(index0) - 1;
-            out.image.joinPaths(index0, index1, op.angle);
-            try out.selectSegment(index0, join_index);
-        }
+        if (interval_a.a == 0) out.image.reversePath(index_a);
+        if (interval_b.a != 0) out.image.reversePath(index_b);
+        const node = out.image.pathLen(index_a) - 1;
+        const index = out.image.joinPaths(index_a, index_b, op.angle);
+        try out.selectSegment(index, node);
         return out;
     }
 
@@ -213,7 +201,7 @@ pub const Remove = struct {
             }
         }
         const path = sel.image.getPath(index);
-        try out_drawing.addPoint(path.positions[0], sel.image.entries.items(.style)[index]);
+        try out_drawing.addPoint(path.positions[0], sel.image.entries.items(.properties)[index]);
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i: u32 = 0;
         while (i + 1 < path.len()) : (i += 1)
@@ -235,7 +223,7 @@ pub const Remove = struct {
             }
         }
         const path = sel.image.getPath(index);
-        try out_drawing.addPoint(path.positions[interval.a], sel.image.entries.items(.style)[index]);
+        try out_drawing.addPoint(path.positions[interval.a], sel.image.entries.items(.properties)[index]);
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i = interval.a;
         while (i != interval.b) : (i = path.nextNode(i))

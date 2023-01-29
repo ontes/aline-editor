@@ -2,20 +2,21 @@ const std = @import("std");
 const math = @import("math");
 const render = @import("render");
 
-pub const PathStyle = struct {
+pub const PathProperties = struct {
     stroke: math.Stroke,
     fill_color: [4]f32,
     stroke_color: [4]f32,
+    name: [16]u8 = .{ 'u', 'n', 'n', 'a', 'm', 'e', 'd' } ++ .{0} ** 9,
 
-    pub fn isFilled(style: PathStyle) bool {
-        return style.fill_color[3] > 0;
+    pub fn isFilled(properties: PathProperties) bool {
+        return properties.fill_color[3] > 0;
     }
 };
 
 const Image = @This();
 
 allocator: std.mem.Allocator,
-entries: std.MultiArrayList(struct { len: u32, looped: bool, style: PathStyle }) = .{},
+entries: std.MultiArrayList(struct { len: u32, looped: bool, properties: PathProperties }) = .{},
 data: std.MultiArrayList(struct { position: math.Vec2, angle: f32 = 0 }) = .{},
 
 pub inline fn init(allocator: std.mem.Allocator) Image {
@@ -34,8 +35,8 @@ pub fn pathLen(image: Image, index: u32) u32 {
 pub fn pathIsLooped(image: Image, index: u32) bool {
     return image.entries.items(.looped)[index];
 }
-pub fn pathStyle(image: Image, index: u32) PathStyle {
-    return image.entries.items(.style)[index];
+pub fn pathProperties(image: Image, index: u32) PathProperties {
+    return image.entries.items(.properties)[index];
 }
 
 pub fn pathNextNode(image: Image, index: u32, node: u32) u32 {
@@ -67,9 +68,9 @@ pub fn getPath(image: Image, index: u32) math.Path {
     return .{ .positions = image.getPositions(index), .angles = image.getAngles(index) };
 }
 
-pub fn addPoint(image: *Image, position: math.Vec2, style: PathStyle) !void {
+pub fn addPoint(image: *Image, position: math.Vec2, properties: PathProperties) !void {
     try image.data.append(image.allocator, .{ .position = position });
-    try image.entries.append(image.allocator, .{ .len = 1, .looped = false, .style = style });
+    try image.entries.append(image.allocator, .{ .len = 1, .looped = false, .properties = properties });
 }
 
 pub fn appendPoint(image: *Image, index: u32, position: math.Vec2, angle: f32) !void {
@@ -103,23 +104,36 @@ pub fn reversePath(image: Image, index: u32) void {
         angle.* = -angle.*;
 }
 
-pub fn joinPaths(image: *Image, index_a: u32, index_b: u32, angle: f32) void {
-    image.data.items(.angle)[image.getDataOffset(index_a) + image.pathLen(index_a) - 1] = angle;
-    if (index_a < index_b) {
-        const from = image.getDataOffset(index_a) + image.pathLen(index_a);
-        const to = image.getDataOffset(index_b) + image.pathLen(index_b);
-        const amount = to - from - image.pathLen(index_b);
+pub fn reorder(image: *Image, index: u32, new_index: u32) void {
+    if (new_index < index) { // lower
+        const from = image.getDataOffset(new_index);
+        const to = image.getDataOffset(index) + image.pathLen(index);
+        const amount = image.getDataOffset(index) - image.getDataOffset(new_index);
         std.mem.rotate(math.Vec2, image.data.items(.position)[from..to], amount);
         std.mem.rotate(f32, image.data.items(.angle)[from..to], amount);
-    } else {
-        const from = image.getDataOffset(index_b);
-        const to = image.getDataOffset(index_a) + image.pathLen(index_a);
-        const amount = image.pathLen(index_b);
+    } else if (new_index > index) { // raise
+        const from = image.getDataOffset(index);
+        const to = image.getDataOffset(new_index) + image.pathLen(new_index);
+        const amount = image.pathLen(index);
         std.mem.rotate(math.Vec2, image.data.items(.position)[from..to], amount);
         std.mem.rotate(f32, image.data.items(.angle)[from..to], amount);
     }
-    image.entries.items(.len)[index_a] += image.entries.items(.len)[index_b];
-    image.entries.orderedRemove(index_b);
+    const entry = image.entries.get(index);
+    image.entries.orderedRemove(index);
+    image.entries.insertAssumeCapacity(new_index, entry);
+}
+
+pub fn joinPaths(image: *Image, index_a: u32, index_b: u32, angle: f32) u32 {
+    if (index_a == index_b) {
+        image.loopPath(index_a, angle);
+        return index_a;
+    }
+    const new_index = if (index_a < index_b) index_a else index_a - 1;
+    image.reorder(index_b, new_index + 1);
+    image.data.items(.angle)[image.getDataOffset(new_index) + image.pathLen(new_index) - 1] = angle;
+    image.entries.items(.len)[new_index] += image.entries.items(.len)[new_index + 1];
+    image.entries.orderedRemove(new_index + 1);
+    return new_index;
 }
 
 /// Split segment in two
@@ -167,8 +181,8 @@ const PathIterator = struct {
     pub fn getIndex(it: *PathIterator) u32 {
         return it.i - 1;
     }
-    pub fn getStyle(it: *PathIterator) PathStyle {
-        return it.image.entries.items(.style)[it.getIndex()];
+    pub fn getProperties(it: *PathIterator) PathProperties {
+        return it.image.entries.items(.properties)[it.getIndex()];
     }
 };
 pub inline fn pathIterator(image: *const Image) PathIterator {
@@ -193,8 +207,8 @@ const ReversePathIterator = struct {
     pub fn getIndex(it: *ReversePathIterator) u32 {
         return it.i;
     }
-    pub fn getStyle(it: *ReversePathIterator) PathStyle {
-        return it.image.entries.items(.style)[it.getIndex()];
+    pub fn getProperties(it: *ReversePathIterator) PathProperties {
+        return it.image.entries.items(.properties)[it.getIndex()];
     }
 };
 pub fn reversePathIterator(image: *const Image) ReversePathIterator {
@@ -204,9 +218,9 @@ pub fn reversePathIterator(image: *const Image) ReversePathIterator {
 pub fn draw(image: Image, buffer: *render.Buffer) !void {
     var it = image.pathIterator();
     while (it.next()) |path| {
-        const style = it.getStyle();
+        const properties = it.getProperties();
         if (path.isLooped())
-            try path.generate(buffer.generator(style.fill_color));
-        try path.generate(style.stroke.generator(buffer.generator(style.stroke_color)));
+            try path.generate(buffer.generator(properties.fill_color));
+        try path.generate(properties.stroke.generator(buffer.generator(properties.stroke_color)));
     }
 }

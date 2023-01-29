@@ -7,6 +7,7 @@ const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 const editor = @import("editor.zig");
 const operations = @import("operations.zig");
 const grabs = @import("grabs.zig");
+const input = @import("input.zig");
 
 var last_time: u64 = 0;
 
@@ -35,7 +36,26 @@ pub fn onFrame() !void {
     imgui_impl_wgpu.newFrame();
     imgui.newFrame();
 
+    imgui.setNextWindowPos(.{ .x = 64, .y = 64 }, .once, .{ .x = 0, .y = 0 });
+    imgui.setNextWindowSize(.{ .x = 256, .y = 256 }, .once);
+    if (imgui.begin("Paths", null, .{})) {
+        const sel = editor.history.get();
+        for (sel.image.entries.items(.properties)) |properties, index| {
+            imgui.pushIDInt(@intCast(c_int, index));
+            var selected = sel.isPathSelected(@intCast(u32, index));
+            if (imgui.selectable(@ptrCast([*:0]const u8, &properties.name), &selected, .{}, .{ .x = 0, .y = 0 })) {
+                if (!input.shift_pressed)
+                    sel.deselectAll();
+                try sel.togglePath(@intCast(u32, index));
+                editor.should_draw_helper = true;
+            }
+            imgui.popID();
+        }
+    }
+    imgui.end();
+
     if (editor.operation) |*any_operation| {
+        imgui.setNextWindowPos(.{ .x = 64, .y = 384 }, .once, .{ .x = 0, .y = 0 });
         imgui.setNextWindowSize(.{ .x = 256, .y = 256 }, .once);
         var open = true;
         if (imgui.begin("Operation", &open, .{})) switch (any_operation.*) {

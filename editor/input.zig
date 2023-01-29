@@ -134,7 +134,7 @@ fn selectRect(min_pos: math.Vec2, max_pos: math.Vec2) !void {
         while (i < path.len()) : (i += 1) {
             if (@reduce(.And, path.positions[i] >= min_pos) and
                 @reduce(.And, path.positions[i] <= max_pos) and
-                !sel.isSelectedNode(it.getIndex(), i))
+                !sel.isNodeSelected(it.getIndex(), i))
                 try sel.selectNode(it.getIndex(), i);
         }
         i = 0;
@@ -143,7 +143,7 @@ fn selectRect(min_pos: math.Vec2, max_pos: math.Vec2) !void {
             const arc_bounds = arc.boundingBox();
             if (@reduce(.And, arc_bounds[0] >= min_pos) and
                 @reduce(.And, arc_bounds[1] <= max_pos) and
-                !sel.isSelectedSegment(it.getIndex(), i))
+                !sel.isSegmentSelected(it.getIndex(), i))
                 try sel.selectSegment(it.getIndex(), i);
         }
     }

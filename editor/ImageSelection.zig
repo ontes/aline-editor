@@ -68,7 +68,7 @@ pub fn isNothingSelected(sel: ImageSelection) bool {
     return sel.loops.items.len == 0 and sel.intervals.len == 0;
 }
 
-pub fn isSelectedNode(sel: ImageSelection, index: u32, node: u32) bool {
+pub fn isNodeSelected(sel: ImageSelection, index: u32, node: u32) bool {
     for (sel.loops.items) |loop_index| {
         if (loop_index == index)
             return true;
@@ -80,7 +80,7 @@ pub fn isSelectedNode(sel: ImageSelection, index: u32, node: u32) bool {
     return false;
 }
 
-pub fn isSelectedSegment(sel: ImageSelection, index: u32, segment: u32) bool {
+pub fn isSegmentSelected(sel: ImageSelection, index: u32, segment: u32) bool {
     for (sel.loops.items) |loop_index| {
         if (loop_index == index)
             return true;
@@ -88,6 +88,22 @@ pub fn isSelectedSegment(sel: ImageSelection, index: u32, segment: u32) bool {
     for (sel.intervals.items(.index)) |interval_index, i| {
         if (interval_index == index and sel.intervals.items(.interval)[i].containsSegment(segment))
             return true;
+    }
+    return false;
+}
+
+pub fn isPathSelected(sel: ImageSelection, index: u32) bool {
+    if (sel.image.pathIsLooped(index)) {
+        for (sel.loops.items) |loop_index| {
+            if (loop_index == index)
+                return true;
+        }
+    } else {
+        for (sel.intervals.items(.index)) |interval_index, i| {
+            if (interval_index == index and sel.intervals.items(.interval)[i].a == 0 and
+                sel.intervals.items(.interval)[i].b == sel.image.pathLen(interval_index) - 1)
+                return true;
+        }
     }
     return false;
 }
@@ -275,7 +291,7 @@ pub fn generateTransformEdges(sel: ImageSelection, mat: math.Mat3, gen: anytype)
     for (sel.intervals.items(.index)) |index, j| {
         const interval = sel.intervals.items(.interval)[j];
         const path = sel.image.getPath(index);
-        if ((path.isLooped() or interval.a > 0) and !sel.isSelectedNode(index, path.prevNode(interval.a))) {
+        if ((path.isLooped() or interval.a > 0) and !sel.isNodeSelected(index, path.prevNode(interval.a))) {
             var arc = path.getArc(path.prevNode(interval.a));
             arc.pos_b = math.transform(mat, arc.pos_b);
             try arc.generate(gen);
@@ -283,7 +299,7 @@ pub fn generateTransformEdges(sel: ImageSelection, mat: math.Mat3, gen: anytype)
         if (path.isLooped() or interval.b < path.len() - 1) {
             var arc = path.getArc(interval.b);
             arc.pos_a = math.transform(mat, arc.pos_a);
-            if (sel.isSelectedNode(index, path.nextNode(interval.b)))
+            if (sel.isNodeSelected(index, path.nextNode(interval.b)))
                 arc.pos_b = math.transform(mat, arc.pos_b);
             try arc.generate(gen);
         }
