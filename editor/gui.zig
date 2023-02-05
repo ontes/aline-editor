@@ -1,4 +1,5 @@
 const std = @import("std");
+const math = @import("math");
 const platform = @import("platform");
 const webgpu = @import("webgpu");
 const imgui = @import("imgui");
@@ -7,7 +8,6 @@ const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 const editor = @import("editor.zig");
 const operations = @import("operations.zig");
 const grabs = @import("grabs.zig");
-const input = @import("input.zig");
 
 var last_time: u64 = 0;
 
@@ -38,18 +38,43 @@ pub fn onFrame() !void {
 
     imgui.setNextWindowPos(.{ .x = 64, .y = 64 }, .once, .{ .x = 0, .y = 0 });
     imgui.setNextWindowSize(.{ .x = 256, .y = 256 }, .once);
-    if (imgui.begin("Paths", null, .{})) {
+    if (imgui.begin("Paths", null, .{}) and imgui.beginListBox("path list box", .{ .x = -1, .y = -1 })) {
         const sel = editor.history.get();
-        for (sel.image.entries.items(.properties)) |properties, index| {
+        for (sel.image.entries.items(.name)) |name, index| {
             imgui.pushIDInt(@intCast(c_int, index));
-            var selected = sel.isPathSelected(@intCast(u32, index));
-            if (imgui.selectable(@ptrCast([*:0]const u8, &properties.name), &selected, .{}, .{ .x = 0, .y = 0 })) {
-                if (!input.shift_pressed)
+            if (imgui.selectable(@ptrCast([*:0]const u8, &name), sel.isPathPartiallySelected(@intCast(u32, index)), .{}, .{ .x = 0, .y = 0 }) or
+                (imgui.isItemHovered(.{ .allow_when_blocked_by_popup = true }) and imgui.isMouseClicked(.right, false) and !sel.isPathSelected(@intCast(u32, index))))
+            {
+                try editor.finishOperation();
+                if (!imgui.isKeyDown(.mod_shift))
                     sel.deselectAll();
                 try sel.togglePath(@intCast(u32, index));
                 editor.should_draw_helper = true;
             }
+            if ((imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))) {
+                try editor.setOperation(.{ .Rename = operations.Rename.init(editor.history.get().*).? });
+            }
             imgui.popID();
+        }
+        imgui.endListBox();
+        if (imgui.beginPopupContextItem("context menu", .{ .mouse_button_right = true })) {
+            try editor.finishOperation();
+            if (operations.Rename.init(editor.history.get().*)) |op| {
+                if (imgui.menuItem("Rename", "F2", false, true)) {
+                    try editor.setOperation(.{ .Rename = op });
+                }
+            }
+            if (operations.ChangeStyle.init(editor.history.get().*)) |op| {
+                if (imgui.menuItem("Change Style", "TAB", false, true)) {
+                    try editor.setOperation(.{ .ChangeStyle = op });
+                }
+            }
+            if (operations.Remove.init(editor.history.get().*)) |op| {
+                if (imgui.menuItem("Remove", "DEL", false, true)) {
+                    try editor.setOperation(.{ .Remove = op });
+                }
+            }
+            imgui.endPopup();
         }
     }
     imgui.end();
@@ -59,6 +84,36 @@ pub fn onFrame() !void {
         imgui.setNextWindowSize(.{ .x = 256, .y = 256 }, .once);
         var open = true;
         if (imgui.begin("Operation", &open, .{})) switch (any_operation.*) {
+            .Rename => |*op| {
+                imgui.text("Rename");
+
+                if (editor.operation_in_new) {
+                    imgui.setKeyboardFocusHere(0);
+                    editor.operation_in_new = false;
+                }
+                if (imgui.inputText("##name", &op.name, 15, .{}, null, null))
+                    try editor.updateOperation();
+            },
+            .ChangeStyle => |*op| {
+                imgui.text("Change Style");
+
+                if (imgui.colorEdit4("fill color", &op.style.fill_color, .{}))
+                    try editor.updateOperation();
+                if (imgui.colorEdit4("stroke color", &op.style.stroke_color, .{}))
+                    try editor.updateOperation();
+                if (imgui.inputFloat("stroke width", &op.style.stroke.width, 0, 0, null, .{}))
+                    try editor.updateOperation();
+                if (imgui.beginCombo("stroke cap", @tagName(op.style.stroke.cap), .{})) {
+                    inline for (@typeInfo(math.Stroke.CapStyle).Enum.fields) |field| {
+                        const tag = @field(math.Stroke.CapStyle, field.name);
+                        if (imgui.selectable(@ptrCast([*:0]const u8, field.name ++ .{0}), op.style.stroke.cap == tag, .{}, .{ .x = 0, .y = 0 })) {
+                            op.style.stroke.cap = tag;
+                            try editor.updateOperation();
+                        }
+                    }
+                    imgui.endCombo();
+                }
+            },
             .AddPoint => |*op| {
                 imgui.text("Add Point");
 
@@ -113,37 +168,43 @@ pub fn onFrame() !void {
     }
 
     if (imgui.beginPopupContextVoid("context menu", .{ .mouse_button_right = true })) {
+        try editor.finishOperation();
+        if (operations.ChangeStyle.init(editor.history.get().*)) |op| {
+            if (imgui.menuItem("Change Style", "TAB", false, true)) {
+                try editor.setOperation(.{ .ChangeStyle = op });
+            }
+        }
         if (operations.AddPoint.init(editor.history.get().*)) |op| {
-            if (imgui.menuItem("Add Point", "A", null, true)) {
+            if (imgui.menuItem("Add Point", "A", false, true)) {
                 try editor.setOperation(.{ .AddPoint = op });
                 editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.AddPoint.position) };
             }
         }
         if (operations.Append.init(editor.history.get().*)) |op| {
-            if (imgui.menuItem("Append", "A", null, true)) {
+            if (imgui.menuItem("Append", "A", false, true)) {
                 try editor.setOperation(.{ .Append = op });
                 editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.Append.position) };
             }
         }
         if (operations.Connect.init(editor.history.get().*)) |op| {
-            if (imgui.menuItem("Connect", "C", null, true)) {
+            if (imgui.menuItem("Connect", "C", false, true)) {
                 try editor.setOperation(.{ .Connect = op });
             }
         }
         if (operations.Move.init(editor.history.get().*)) |op| {
-            if (imgui.menuItem("Move", "G", null, true)) {
+            if (imgui.menuItem("Move", "G", false, true)) {
                 try editor.setOperation(.{ .Move = op });
                 editor.grab = .{ .Offset = grabs.Offset.init(&editor.operation.?.Move.offset) };
             }
         }
         if (operations.ChangeAngle.init(editor.history.get().*)) |op| {
-            if (imgui.menuItem("Change Angle", "D", null, true)) {
+            if (imgui.menuItem("Change Angle", "D", false, true)) {
                 try editor.setOperation(.{ .ChangeAngle = op });
                 editor.grab = .{ .Angle = grabs.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
             }
         }
         if (operations.Remove.init(editor.history.get().*)) |op| {
-            if (imgui.menuItem("Remove", "DEL", null, true)) {
+            if (imgui.menuItem("Remove", "DEL", false, true)) {
                 try editor.setOperation(.{ .Remove = op });
             }
         }
@@ -153,9 +214,12 @@ pub fn onFrame() !void {
     imgui.render();
 }
 
-pub fn isGrabbed() bool {
-    const io = imgui.getIO();
-    return io.want_capture_mouse or io.want_capture_keyboard;
+pub fn isMouseGrabbed() bool {
+    return imgui.getIO().want_capture_mouse;
+}
+
+pub fn isKeyboardGrabbed() bool {
+    return imgui.getIO().want_capture_keyboard;
 }
 
 pub fn render(pass: *webgpu.RenderPassEncoder) void {
@@ -163,6 +227,7 @@ pub fn render(pass: *webgpu.RenderPassEncoder) void {
 }
 
 pub fn onEvent(event: platform.Event) void {
+    if (editor.grab != null) return;
     const io = imgui.getIO();
     switch (event) {
         .key_press, .key_release => |key| {
@@ -173,21 +238,11 @@ pub fn onEvent(event: platform.Event) void {
             if (toImguiModKey(key)) |imgui_key|
                 io.addKeyEvent(imgui_key, event == .key_press);
         },
-        .text_input => |text| {
-            io.addInputCharactersUTF8(text.ptr);
-        },
-        .mouse_move => |pos| {
-            io.addMousePosEvent(@intToFloat(f32, pos[0]), @intToFloat(f32, pos[1]));
-        },
-        .mouse_scroll => |offset| {
-            io.addMouseWheelEvent(0, @intToFloat(f32, offset));
-        },
-        .window_resize => |size| {
-            io.display_size = .{ .x = @intToFloat(f32, size[0]), .y = @intToFloat(f32, size[1]) };
-        },
-        .window_focus, .window_unfocus => {
-            io.addFocusEvent(event == .window_focus);
-        },
+        .text_input => |text| io.addInputCharactersUTF8(text.ptr),
+        .mouse_move => |pos| io.addMousePosEvent(@intToFloat(f32, pos[0]), @intToFloat(f32, pos[1])),
+        .mouse_scroll => |offset| io.addMouseWheelEvent(0, @intToFloat(f32, offset)),
+        .window_resize => |size| io.display_size = .{ .x = @intToFloat(f32, size[0]), .y = @intToFloat(f32, size[1]) },
+        .window_focus, .window_unfocus => io.addFocusEvent(event == .window_focus),
         else => {},
     }
 }

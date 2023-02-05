@@ -10,6 +10,7 @@ const canvas = @import("canvas.zig");
 pub var history: History = undefined;
 pub var operation: ?operations.AnyOperation = null;
 pub var grab: ?grabs.AnyGrab = null;
+pub var operation_in_new = false;
 
 const live_preview = true;
 pub var should_draw_canvas = true;
@@ -52,6 +53,7 @@ pub fn finishOperation() !void {
 pub fn setOperation(new_operation: operations.AnyOperation) !void {
     try finishOperation();
     operation = new_operation;
+    operation_in_new = true;
     try history.add(try history.get().clone());
     try updateOperation();
 }

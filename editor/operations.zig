@@ -6,13 +6,15 @@ const ImageSelection = @import("ImageSelection.zig");
 const snapping = @import("snapping.zig");
 const canvas = @import("canvas.zig");
 
-const default_properties = Image.PathProperties{
+const default_style = Image.PathStyle{
     .stroke = .{ .width = 2, .cap = .round },
     .fill_color = .{ 0.5, 0.5, 0.5, 1 },
     .stroke_color = .{ 0, 0, 0, 1 },
 };
 
 pub const AnyOperation = union(enum) {
+    Rename: Rename,
+    ChangeStyle: ChangeStyle,
     AddPoint: AddPoint,
     Append: Append,
     Connect: Connect,
@@ -28,14 +30,61 @@ pub const AnyOperation = union(enum) {
 
     pub fn generateHelper(op: AnyOperation, sel: ImageSelection, gen: anytype) !void {
         return switch (op) {
-            inline else => |comptime_op| comptime_op.generateHelper(sel, gen),
+            inline else => |comptime_op| if (@hasDecl(@TypeOf(comptime_op), "generateHelper")) comptime_op.generateHelper(sel, gen),
         };
+    }
+};
+
+pub const Rename = struct {
+    name: [16]u8,
+
+    pub fn init(sel: ImageSelection) ?Rename {
+        if (sel.loops.items.len == 1 and sel.intervals.len == 0)
+            return .{ .name = sel.image.pathName(sel.loops.items[0]) };
+        if (sel.loops.items.len == 0 and sel.intervals.len == 1) {
+            const index = sel.intervals.items(.index)[0];
+            const interval = sel.intervals.items(.interval)[0];
+            if (interval.a == 0 and interval.b == sel.image.pathLen(index) - 1)
+                return .{ .name = sel.image.pathName(index) };
+        }
+        return null;
+    }
+
+    pub fn apply(op: Rename, sel: ImageSelection) !ImageSelection {
+        const index = if (sel.loops.items.len > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
+        var out = try sel.clone();
+        out.image.entries.items(.name)[index] = op.name;
+        return out;
+    }
+};
+
+pub const ChangeStyle = struct {
+    style: Image.PathStyle,
+
+    pub fn init(sel: ImageSelection) ?ChangeStyle {
+        if (sel.loops.items.len == 1 and sel.intervals.len == 0)
+            return .{ .style = sel.image.pathStyle(sel.loops.items[0]) };
+        if (sel.loops.items.len == 0 and sel.intervals.len == 1) {
+            const index = sel.intervals.items(.index)[0];
+            const interval = sel.intervals.items(.interval)[0];
+            if (interval.a == 0 and interval.b == sel.image.pathLen(index) - 1)
+                return .{ .style = sel.image.pathStyle(index) };
+        }
+        return null;
+    }
+
+    pub fn apply(op: ChangeStyle, sel: ImageSelection) !ImageSelection {
+        const index = if (sel.loops.items.len > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
+        var out = try sel.clone();
+        out.image.entries.items(.style)[index] = op.style;
+        return out;
     }
 };
 
 pub const AddPoint = struct {
     position: math.Vec2 = .{ 0, 0 },
-    properties: Image.PathProperties = default_properties,
+    style: Image.PathStyle = default_style,
+    name: Image.PathName = .{ 'u', 'n', 'n', 'a', 'm', 'e', 'd' } ++ .{0} ** 9,
 
     pub fn init(sel: ImageSelection) ?AddPoint {
         if (!sel.isNothingSelected()) return null;
@@ -44,7 +93,7 @@ pub const AddPoint = struct {
 
     pub fn apply(op: AddPoint, sel: ImageSelection) !ImageSelection {
         var out = try sel.cloneWithNothingSelected();
-        try out.image.addPoint(op.position, op.properties);
+        try out.image.addPoint(op.position, op.style, op.name);
         try out.selectNode(@intCast(u32, sel.image.entries.len), 0);
         return out;
     }
@@ -134,13 +183,6 @@ pub const Connect = struct {
         try out.selectSegment(index, node);
         return out;
     }
-
-    pub fn generateHelper(op: Connect, sel: ImageSelection, gen: anytype) !void {
-        _ = op;
-        _ = sel;
-        _ = gen;
-        // TODO
-    }
 };
 
 pub const Move = struct {
@@ -201,7 +243,7 @@ pub const Remove = struct {
             }
         }
         const path = sel.image.getPath(index);
-        try out_drawing.addPoint(path.positions[0], sel.image.entries.items(.properties)[index]);
+        try out_drawing.addPoint(path.positions[0], sel.image.pathStyle(index), sel.image.pathName(index));
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i: u32 = 0;
         while (i + 1 < path.len()) : (i += 1)
@@ -223,17 +265,11 @@ pub const Remove = struct {
             }
         }
         const path = sel.image.getPath(index);
-        try out_drawing.addPoint(path.positions[interval.a], sel.image.entries.items(.properties)[index]);
+        try out_drawing.addPoint(path.positions[interval.a], sel.image.pathStyle(index), sel.image.pathName(index));
         const new_index = @intCast(u32, out_drawing.entries.len - 1);
         var i = interval.a;
         while (i != interval.b) : (i = path.nextNode(i))
             try out_drawing.appendPoint(new_index, path.positions[path.nextNode(i)], path.angles[i]);
-    }
-
-    pub fn generateHelper(_: Remove, sel: ImageSelection, gen: anytype) !void {
-        _ = sel;
-        _ = gen;
-        // TODO
     }
 };
 

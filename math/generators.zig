@@ -94,30 +94,34 @@ pub fn StrokeGenerator(comptime Child: type) type {
             const normal_a = if (side) -geometry.normal(sdir_a) else geometry.normal(sdir_a);
             const normal_b = if (side) geometry.normal(sdir_b) else -geometry.normal(sdir_b);
 
-            var pass = g.child.begin();
             switch (g.stroke.cap) {
                 .none => {},
                 .round => {
+                    var pass = g.child.begin();
                     try pass.add(pos + normal_a, geometry.Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, sdir));
                     try pass.add(pos + normal_b, 0);
+                    try pass.end(pos, 0);
                 },
                 .bevel => {
+                    var pass = g.child.begin();
                     try pass.add(pos + normal_a, 0);
                     try pass.add(pos + normal_b, 0);
+                    try pass.end(pos, 0);
                 },
                 .miter => {
+                    var pass = g.child.begin();
                     try pass.add(pos + normal_a, 0);
                     const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (sdir[0] * dir_a[1] - sdir[1] * dir_a[0]);
-                    if (tip_dist > 0 and tip_dist < 8) {
+                    if (tip_dist > 0 and tip_dist < 4) {
                         try pass.add(pos + sdir * linalg.vec2.splat(tip_dist), 0);
                     } else {
                         try pass.add(pos + normal_a + sdir_a, 0);
                         try pass.add(pos + normal_b + sdir_b, 0);
                     }
                     try pass.add(pos + normal_b, 0);
+                    try pass.end(pos, 0);
                 },
             }
-            try pass.end(pos, 0);
         }
 
         fn generateSegment(g: Generator, arc: geometry.Arc) !void {

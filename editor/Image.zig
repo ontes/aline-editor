@@ -2,21 +2,22 @@ const std = @import("std");
 const math = @import("math");
 const render = @import("render");
 
-pub const PathProperties = struct {
-    stroke: math.Stroke,
+pub const PathStyle = struct {
     fill_color: [4]f32,
     stroke_color: [4]f32,
-    name: [16]u8 = .{ 'u', 'n', 'n', 'a', 'm', 'e', 'd' } ++ .{0} ** 9,
+    stroke: math.Stroke,
 
-    pub fn isFilled(properties: PathProperties) bool {
-        return properties.fill_color[3] > 0;
+    pub fn isFilled(style: PathStyle) bool {
+        return style.fill_color[3] > 0;
     }
 };
+
+pub const PathName = [16]u8;
 
 const Image = @This();
 
 allocator: std.mem.Allocator,
-entries: std.MultiArrayList(struct { len: u32, looped: bool, properties: PathProperties }) = .{},
+entries: std.MultiArrayList(struct { len: u32, looped: bool, style: PathStyle, name: PathName }) = .{},
 data: std.MultiArrayList(struct { position: math.Vec2, angle: f32 = 0 }) = .{},
 
 pub inline fn init(allocator: std.mem.Allocator) Image {
@@ -35,8 +36,11 @@ pub fn pathLen(image: Image, index: u32) u32 {
 pub fn pathIsLooped(image: Image, index: u32) bool {
     return image.entries.items(.looped)[index];
 }
-pub fn pathProperties(image: Image, index: u32) PathProperties {
-    return image.entries.items(.properties)[index];
+pub fn pathStyle(image: Image, index: u32) PathStyle {
+    return image.entries.items(.style)[index];
+}
+pub fn pathName(image: Image, index: u32) [16]u8 {
+    return image.entries.items(.name)[index];
 }
 
 pub fn pathNextNode(image: Image, index: u32, node: u32) u32 {
@@ -68,9 +72,9 @@ pub fn getPath(image: Image, index: u32) math.Path {
     return .{ .positions = image.getPositions(index), .angles = image.getAngles(index) };
 }
 
-pub fn addPoint(image: *Image, position: math.Vec2, properties: PathProperties) !void {
+pub fn addPoint(image: *Image, position: math.Vec2, style: PathStyle, name: PathName) !void {
     try image.data.append(image.allocator, .{ .position = position });
-    try image.entries.append(image.allocator, .{ .len = 1, .looped = false, .properties = properties });
+    try image.entries.append(image.allocator, .{ .len = 1, .looped = false, .style = style, .name = name });
 }
 
 pub fn appendPoint(image: *Image, index: u32, position: math.Vec2, angle: f32) !void {
@@ -181,8 +185,8 @@ const PathIterator = struct {
     pub fn getIndex(it: *PathIterator) u32 {
         return it.i - 1;
     }
-    pub fn getProperties(it: *PathIterator) PathProperties {
-        return it.image.entries.items(.properties)[it.getIndex()];
+    pub fn getStyle(it: *PathIterator) PathStyle {
+        return it.image.entries.items(.style)[it.getIndex()];
     }
 };
 pub inline fn pathIterator(image: *const Image) PathIterator {
@@ -207,8 +211,8 @@ const ReversePathIterator = struct {
     pub fn getIndex(it: *ReversePathIterator) u32 {
         return it.i;
     }
-    pub fn getProperties(it: *ReversePathIterator) PathProperties {
-        return it.image.entries.items(.properties)[it.getIndex()];
+    pub fn getStyle(it: *ReversePathIterator) PathStyle {
+        return it.image.entries.items(.style)[it.getIndex()];
     }
 };
 pub fn reversePathIterator(image: *const Image) ReversePathIterator {
@@ -218,9 +222,9 @@ pub fn reversePathIterator(image: *const Image) ReversePathIterator {
 pub fn draw(image: Image, buffer: *render.Buffer) !void {
     var it = image.pathIterator();
     while (it.next()) |path| {
-        const properties = it.getProperties();
+        const style = it.getStyle();
         if (path.isLooped())
-            try path.generate(buffer.generator(properties.fill_color));
-        try path.generate(properties.stroke.generator(buffer.generator(properties.stroke_color)));
+            try path.generate(buffer.generator(style.fill_color));
+        try path.generate(style.stroke.generator(buffer.generator(style.stroke_color)));
     }
 }

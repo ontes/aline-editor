@@ -6,39 +6,39 @@ const editor = @import("editor.zig");
 const operations = @import("operations.zig");
 const grabs = @import("grabs.zig");
 const snapping = @import("snapping.zig");
+const gui = @import("gui.zig");
 
 pub var ctrl_pressed: bool = false;
 pub var shift_pressed: bool = false;
 pub var alt_pressed: bool = false;
 var mouse_click_pos: ?math.Vec2 = null;
 
-pub fn onEvent(event: platform.Event, ui_grabbed: bool) !void {
+pub fn onEvent(event: platform.Event) !void {
     switch (event) {
         .key_press => |key| switch (key) {
-            .mouse_left => {
-                if (editor.grab) |_| {
-                    editor.grab = null;
-                    try editor.updateOperation();
-                } else if (!ui_grabbed) {
-                    mouse_click_pos = canvas.mousePos();
-                }
+            .mouse_left => if (editor.grab) |_| {
+                editor.grab = null;
+                try editor.updateOperation();
+            } else if (!gui.isMouseGrabbed()) {
+                mouse_click_pos = canvas.mousePos();
             },
-            .mouse_right => {
-                if (editor.grab) |grab| {
-                    grab.cancel();
-                    editor.grab = null;
-                    try editor.updateOperation();
-                }
+            .mouse_right => if (editor.grab) |grab| {
+                grab.cancel();
+                editor.grab = null;
+                try editor.updateOperation();
             },
             .left_ctrl, .right_ctrl => ctrl_pressed = true,
             .left_shift, .right_shift => shift_pressed = true,
             .left_alt, .right_alt => alt_pressed = true,
-            else => {},
+            else => if (!gui.isKeyboardGrabbed()) {
+                try beginOperation(key);
+            },
         },
         .key_release => |key| switch (key) {
             .mouse_left => {
                 if (mouse_click_pos != null) {
-                    if (editor.grab == null and !ui_grabbed) {
+                    if (editor.grab == null and !gui.isMouseGrabbed()) {
+                        try editor.finishOperation();
                         if (!shift_pressed)
                             editor.history.get().deselectAll();
                         const mouse_pos = canvas.mousePos();
@@ -55,59 +55,52 @@ pub fn onEvent(event: platform.Event, ui_grabbed: bool) !void {
             .left_ctrl, .right_ctrl => ctrl_pressed = false,
             .left_shift, .right_shift => shift_pressed = false,
             .left_alt, .right_alt => alt_pressed = false,
-            .z => {
-                try editor.finishOperation();
-                if (ctrl_pressed and editor.history.undo()) {
-                    editor.should_draw_image = true;
-                    editor.should_draw_helper = true;
-                }
-            },
-            .y => {
-                try editor.finishOperation();
-                if (ctrl_pressed and editor.history.redo()) {
-                    editor.should_draw_image = true;
-                    editor.should_draw_helper = true;
-                }
-            },
-            .a => {
-                try editor.finishOperation();
-                if (ctrl_pressed) {
-                    try editor.history.get().selectAll();
-                    editor.should_draw_helper = true;
-                } else if (operations.AddPoint.init(editor.history.get().*)) |op| {
-                    try editor.setOperation(.{ .AddPoint = op });
-                    editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.AddPoint.position) };
-                } else if (operations.Append.init(editor.history.get().*)) |op| {
-                    try editor.setOperation(.{ .Append = op });
-                    editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.Append.position) };
-                }
-            },
-            .c => {
-                try editor.finishOperation();
-                if (operations.Connect.init(editor.history.get().*)) |op| {
-                    try editor.setOperation(.{ .Connect = op });
-                }
-            },
-            .g => {
-                try editor.finishOperation();
-                if (operations.Move.init(editor.history.get().*)) |op| {
-                    try editor.setOperation(.{ .Move = op });
-                    editor.grab = .{ .Offset = grabs.Offset.init(&editor.operation.?.Move.offset) };
-                }
-            },
-            .d => {
-                try editor.finishOperation();
-                if (operations.ChangeAngle.init(editor.history.get().*)) |op| {
-                    try editor.setOperation(.{ .ChangeAngle = op });
-                    editor.grab = .{ .Angle = grabs.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
-                }
-            },
-            .delete => {
-                try editor.finishOperation();
-                if (operations.Remove.init(editor.history.get().*)) |op|
-                    try editor.setOperation(.{ .Remove = op });
-            },
             else => {},
+        },
+        else => {},
+    }
+}
+
+fn beginOperation(key: platform.Key) !void {
+    try editor.finishOperation();
+    switch (key) {
+        .tab => if (operations.ChangeStyle.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .ChangeStyle = op });
+        },
+        .f2 => if (operations.Rename.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .Rename = op });
+        },
+        .a => if (ctrl_pressed) {
+            try editor.history.get().selectAll();
+            editor.should_draw_helper = true;
+        } else if (operations.AddPoint.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .AddPoint = op });
+            editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.AddPoint.position) };
+        } else if (operations.Append.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .Append = op });
+            editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.Append.position) };
+        },
+        .c => if (operations.Connect.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .Connect = op });
+        },
+        .g => if (operations.Move.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .Move = op });
+            editor.grab = .{ .Offset = grabs.Offset.init(&editor.operation.?.Move.offset) };
+        },
+        .d => if (operations.ChangeAngle.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .ChangeAngle = op });
+            editor.grab = .{ .Angle = grabs.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
+        },
+        .delete => if (operations.Remove.init(editor.history.get().*)) |op| {
+            try editor.setOperation(.{ .Remove = op });
+        },
+        .z => if (ctrl_pressed and editor.history.undo()) {
+            editor.should_draw_image = true;
+            editor.should_draw_helper = true;
+        },
+        .y => if (ctrl_pressed and editor.history.redo()) {
+            editor.should_draw_image = true;
+            editor.should_draw_helper = true;
         },
         else => {},
     }

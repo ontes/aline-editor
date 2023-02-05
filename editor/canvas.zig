@@ -37,6 +37,7 @@ pub fn onEvent(event: platform.Event) !void {
             };
             if (mouse_middle_pressed) {
                 canvas_pan -= mouseOffset();
+                mouse_pos = prev_mouse_pos;
                 editor.should_update_transform = true;
             }
         },

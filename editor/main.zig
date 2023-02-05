@@ -97,7 +97,7 @@ fn onEvent(event: platform.Event, _: platform.Window) !void {
     }
     try canvas.onEvent(event);
     gui.onEvent(event);
-    try input.onEvent(event, gui.isGrabbed());
+    try input.onEvent(event);
     if (editor.grab) |grab| {
         if (try grab.onEvent(event))
             try editor.updateOperation();

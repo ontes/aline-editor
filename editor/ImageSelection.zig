@@ -108,6 +108,18 @@ pub fn isPathSelected(sel: ImageSelection, index: u32) bool {
     return false;
 }
 
+pub fn isPathPartiallySelected(sel: ImageSelection, index: u32) bool {
+    for (sel.loops.items) |loop_index| {
+        if (loop_index == index)
+            return true;
+    }
+    for (sel.intervals.items(.index)) |interval_index| {
+        if (interval_index == index)
+            return true;
+    }
+    return false;
+}
+
 fn addLoop(sel: *ImageSelection, index: u32) !void {
     try sel.loops.append(sel.image.allocator, index);
 }

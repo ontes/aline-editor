@@ -26,7 +26,7 @@ const imgui_pkg = std.build.Pkg{
 const imgui_impl_wgpu_pkg = std.build.Pkg{
     .name = "imgui_impl_wgpu",
     .source = .{ .path = "imgui-zig/imgui_impl_wgpu.zig" },
-    .dependencies = &.{webgpu_pkg},
+    .dependencies = &.{ imgui_pkg, webgpu_pkg },
 };
 
 pub fn build(b: *std.build.Builder) !void {
