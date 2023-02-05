@@ -4,7 +4,6 @@ const render = @import("render");
 const webgpu = @import("webgpu");
 
 const editor = @import("editor.zig");
-const canvas = @import("canvas.zig");
 const input = @import("input.zig");
 const gui = @import("gui.zig");
 
@@ -52,7 +51,7 @@ fn onFrame() !void {
 
     if (editor.should_draw_canvas) {
         buffers[0].clear();
-        try canvas.draw(&buffers[0]);
+        try editor.drawCanvas(&buffers[0]);
         buffers[0].flush();
         editor.should_draw_canvas = false;
     }
@@ -70,7 +69,7 @@ fn onFrame() !void {
     }
     if (editor.should_update_transform) {
         for (buffers) |*buffer|
-            buffer.setTransform(canvas.transform());
+            buffer.setTransform(editor.getTransform());
         editor.should_update_transform = false;
     }
 
@@ -95,13 +94,8 @@ fn onEvent(event: platform.Event, _: platform.Window) !void {
         .window_resize => |size| context.onWindowResize(size),
         else => {},
     }
-    try canvas.onEvent(event);
     gui.onEvent(event);
     try input.onEvent(event);
-    if (editor.grab) |grab| {
-        if (try grab.onEvent(event))
-            try editor.updateOperation();
-    }
 }
 
 pub fn main() !void {

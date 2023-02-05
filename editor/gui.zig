@@ -6,8 +6,6 @@ const imgui = @import("imgui");
 const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 
 const editor = @import("editor.zig");
-const operations = @import("operations.zig");
-const grabs = @import("grabs.zig");
 
 var last_time: u64 = 0;
 
@@ -52,24 +50,24 @@ pub fn onFrame() !void {
                 editor.should_draw_helper = true;
             }
             if ((imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))) {
-                try editor.setOperation(.{ .Rename = operations.Rename.init(editor.history.get().*).? });
+                try editor.setOperation(.{ .Rename = editor.Operation.Rename.init(editor.history.get().*).? });
             }
             imgui.popID();
         }
         imgui.endListBox();
         if (imgui.beginPopupContextItem("context menu", .{ .mouse_button_right = true })) {
             try editor.finishOperation();
-            if (operations.Rename.init(editor.history.get().*)) |op| {
+            if (editor.Operation.Rename.init(editor.history.get().*)) |op| {
                 if (imgui.menuItem("Rename", "F2", false, true)) {
                     try editor.setOperation(.{ .Rename = op });
                 }
             }
-            if (operations.ChangeStyle.init(editor.history.get().*)) |op| {
+            if (editor.Operation.ChangeStyle.init(editor.history.get().*)) |op| {
                 if (imgui.menuItem("Change Style", "TAB", false, true)) {
                     try editor.setOperation(.{ .ChangeStyle = op });
                 }
             }
-            if (operations.Remove.init(editor.history.get().*)) |op| {
+            if (editor.Operation.Remove.init(editor.history.get().*)) |op| {
                 if (imgui.menuItem("Remove", "DEL", false, true)) {
                     try editor.setOperation(.{ .Remove = op });
                 }
@@ -119,37 +117,37 @@ pub fn onFrame() !void {
 
                 if (imgui.inputFloat2("position", &op.position[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.button("grab position", .{ .x = 0, .y = 0 }))
-                    editor.grab = .{ .Position = grabs.Position.init(&op.position) };
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.position) };
             },
             .Append => |*op| {
                 imgui.text("Append");
 
                 if (imgui.inputFloat2("position", &op.position[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.button("grab position", .{ .x = 0, .y = 0 }))
-                    editor.grab = .{ .Position = grabs.Position.init(&op.position) };
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.position) };
 
                 if (imgui.inputFloat("angle", &op.angle, 0, 0, null, .{}))
                     try editor.updateOperation();
-                if (imgui.button("grab angle", .{ .x = 0, .y = 0 }))
-                    editor.grab = .{ .Angle = grabs.Angle.init(&op.angle, op._pos_a, op.position) };
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op.position) };
             },
             .Connect => |*op| {
                 imgui.text("Connect");
 
                 if (imgui.inputFloat("angle", &op.angle, 0, 0, null, .{}))
                     try editor.updateOperation();
-                if (imgui.button("grab angle", .{ .x = 0, .y = 0 }))
-                    editor.grab = .{ .Angle = grabs.Angle.init(&op.angle, op._pos_a, op._pos_b) };
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op._pos_b) };
             },
             .Move => |*op| {
                 imgui.text("Move");
 
                 if (imgui.inputFloat2("offset", &op.offset[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.button("grab offset", .{ .x = 0, .y = 0 }))
-                    editor.grab = .{ .Offset = grabs.Offset.init(&op.offset) };
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Offset = editor.Capture.Offset.init(&op.offset) };
             },
             .Remove => {
                 imgui.text("Remove");
@@ -159,8 +157,8 @@ pub fn onFrame() !void {
 
                 if (imgui.inputFloat("angle", &op.angle, 0, 0, null, .{}))
                     try editor.updateOperation();
-                if (imgui.button("grab angle", .{ .x = 0, .y = 0 }))
-                    editor.grab = .{ .Angle = grabs.Angle.init(&op.angle, op._pos_a, op._pos_b) };
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op._pos_b) };
             },
         };
         if (!open) editor.operation = null;
@@ -169,41 +167,41 @@ pub fn onFrame() !void {
 
     if (imgui.beginPopupContextVoid("context menu", .{ .mouse_button_right = true })) {
         try editor.finishOperation();
-        if (operations.ChangeStyle.init(editor.history.get().*)) |op| {
+        if (editor.Operation.ChangeStyle.init(editor.history.get().*)) |op| {
             if (imgui.menuItem("Change Style", "TAB", false, true)) {
                 try editor.setOperation(.{ .ChangeStyle = op });
             }
         }
-        if (operations.AddPoint.init(editor.history.get().*)) |op| {
+        if (editor.Operation.AddPoint.init(editor.history.get().*)) |op| {
             if (imgui.menuItem("Add Point", "A", false, true)) {
                 try editor.setOperation(.{ .AddPoint = op });
-                editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.AddPoint.position) };
+                editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.AddPoint.position) };
             }
         }
-        if (operations.Append.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Append.init(editor.history.get().*)) |op| {
             if (imgui.menuItem("Append", "A", false, true)) {
                 try editor.setOperation(.{ .Append = op });
-                editor.grab = .{ .Position = grabs.Position.init(&editor.operation.?.Append.position) };
+                editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.Append.position) };
             }
         }
-        if (operations.Connect.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Connect.init(editor.history.get().*)) |op| {
             if (imgui.menuItem("Connect", "C", false, true)) {
                 try editor.setOperation(.{ .Connect = op });
             }
         }
-        if (operations.Move.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Move.init(editor.history.get().*)) |op| {
             if (imgui.menuItem("Move", "G", false, true)) {
                 try editor.setOperation(.{ .Move = op });
-                editor.grab = .{ .Offset = grabs.Offset.init(&editor.operation.?.Move.offset) };
+                editor.capture = .{ .Offset = editor.Capture.Offset.init(&editor.operation.?.Move.offset) };
             }
         }
-        if (operations.ChangeAngle.init(editor.history.get().*)) |op| {
+        if (editor.Operation.ChangeAngle.init(editor.history.get().*)) |op| {
             if (imgui.menuItem("Change Angle", "D", false, true)) {
                 try editor.setOperation(.{ .ChangeAngle = op });
-                editor.grab = .{ .Angle = grabs.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
+                editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
             }
         }
-        if (operations.Remove.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Remove.init(editor.history.get().*)) |op| {
             if (imgui.menuItem("Remove", "DEL", false, true)) {
                 try editor.setOperation(.{ .Remove = op });
             }
@@ -214,11 +212,11 @@ pub fn onFrame() !void {
     imgui.render();
 }
 
-pub fn isMouseGrabbed() bool {
+pub fn isMouseCaptured() bool {
     return imgui.getIO().want_capture_mouse;
 }
 
-pub fn isKeyboardGrabbed() bool {
+pub fn isKeyboardCaptured() bool {
     return imgui.getIO().want_capture_keyboard;
 }
 
@@ -227,7 +225,7 @@ pub fn render(pass: *webgpu.RenderPassEncoder) void {
 }
 
 pub fn onEvent(event: platform.Event) void {
-    if (editor.grab != null) return;
+    if (editor.capture != null) return;
     const io = imgui.getIO();
     switch (event) {
         .key_press, .key_release => |key| {
