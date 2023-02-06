@@ -7,7 +7,7 @@ const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 
 const editor = @import("editor.zig");
 
-var last_time: u64 = 0;
+var last_time: u128 = 0;
 
 pub fn init(device: *webgpu.Device) void {
     _ = imgui.createContext(null);
@@ -17,7 +17,7 @@ pub fn init(device: *webgpu.Device) void {
     const io = imgui.getIO();
     io.backend_platform_name = "imgui_impl_aline";
     io.ini_filename = null;
-    last_time = @intCast(u64, std.time.microTimestamp());
+    last_time = @intCast(u128, std.time.nanoTimestamp());
 }
 
 pub fn deinit() void {
@@ -27,8 +27,8 @@ pub fn deinit() void {
 
 pub fn onFrame() !void {
     const io = imgui.getIO();
-    const time = @intCast(u64, std.time.microTimestamp());
-    io.delta_time = @intToFloat(f32, time - last_time) / std.time.us_per_s;
+    const time = @intCast(u128, std.time.nanoTimestamp());
+    io.delta_time = @intToFloat(f32, time - last_time) / std.time.ns_per_s;
     last_time = time;
 
     imgui_impl_wgpu.newFrame();
@@ -104,7 +104,7 @@ pub fn onFrame() !void {
                 if (imgui.beginCombo("stroke cap", @tagName(op.style.stroke.cap), .{})) {
                     inline for (@typeInfo(math.Stroke.CapStyle).Enum.fields) |field| {
                         const tag = @field(math.Stroke.CapStyle, field.name);
-                        if (imgui.selectable(@ptrCast([*:0]const u8, field.name ++ .{0}), op.style.stroke.cap == tag, .{}, .{ .x = 0, .y = 0 })) {
+                        if (imgui.selectable(field.name ++ "", op.style.stroke.cap == tag, .{}, .{ .x = 0, .y = 0 })) {
                             op.style.stroke.cap = tag;
                             try editor.updateOperation();
                         }
