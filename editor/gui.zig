@@ -149,8 +149,11 @@ pub fn onFrame() !void {
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Offset = editor.Capture.Offset.init(&op.offset) };
             },
-            .Remove => {
+            .Remove => |*op| {
                 imgui.text("Remove");
+
+                if (imgui.checkbox("remove single nodes", &op.remove_single_nodes))
+                    try editor.updateOperation();
             },
             .ChangeAngle => |*op| {
                 imgui.text("Change Angle");

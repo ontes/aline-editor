@@ -227,25 +227,27 @@ pub const Operation = union(enum) {
     };
 
     pub const Remove = struct {
+        remove_single_nodes: bool = true,
+
         pub fn init(sel: ImageSelection) ?Remove {
             if (sel.isNothingSelected()) return null;
             return .{};
         }
 
-        pub fn apply(_: Remove, sel: ImageSelection) !ImageSelection {
+        pub fn apply(op: Remove, sel: ImageSelection) !ImageSelection {
             var out = ImageSelection.init(sel.image.allocator);
             var it = sel.image.pathIterator();
             while (it.next()) |path| {
                 if (path.isLooped()) {
-                    try addUnselectedLoop(&out.image, sel, it.getIndex());
+                    try op.addUnselectedLoop(&out.image, sel, it.getIndex());
                 } else {
-                    try addUnselectedInterval(&out.image, sel, it.getIndex(), .{ .a = 0, .b = path.len() - 1 });
+                    try op.addUnselectedInterval(&out.image, sel, it.getIndex(), .{ .a = 0, .b = path.len() - 1 });
                 }
             }
             return out;
         }
 
-        fn addUnselectedLoop(out_drawing: *Image, sel: ImageSelection, index: u32) !void {
+        fn addUnselectedLoop(op: Remove, out_drawing: *Image, sel: ImageSelection, index: u32) !void {
             for (sel.loops.items) |sel_index| {
                 if (sel_index == index)
                     return;
@@ -254,7 +256,11 @@ pub const Operation = union(enum) {
                 if (sel_index == index) {
                     const sel_interval = sel.intervals.items(.interval)[i];
                     if (!sel_interval.isSingleNode()) {
-                        try addUnselectedInterval(out_drawing, sel, index, .{ .a = sel_interval.b, .b = sel_interval.a });
+                        try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel_interval.b, .b = sel_interval.a });
+                        return;
+                    }
+                    if (sel_interval.isSingleNode() and op.remove_single_nodes) {
+                        try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel.image.pathNextNode(index, sel_interval.b), .b = sel.image.pathPrevNode(index, sel_interval.a) });
                         return;
                     }
                 }
@@ -268,17 +274,26 @@ pub const Operation = union(enum) {
             out_drawing.loopPath(new_index, path.angles[i]);
         }
 
-        fn addUnselectedInterval(out_drawing: *Image, sel: ImageSelection, index: u32, interval: ImageSelection.Interval) !void {
+        fn addUnselectedInterval(op: Remove, out_drawing: *Image, sel: ImageSelection, index: u32, interval: ImageSelection.Interval) !void {
             for (sel.intervals.items(.index)) |sel_index, i| {
                 if (sel_index == index) {
                     const sel_interval = sel.intervals.items(.interval)[i];
                     if (!sel_interval.isSingleNode() and interval.containsSegment(sel_interval.a)) {
                         if (sel_interval.a != interval.a)
-                            try addUnselectedInterval(out_drawing, sel, index, .{ .a = interval.a, .b = sel_interval.a });
+                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = interval.a, .b = sel_interval.a });
                         if (sel_interval.b != interval.b)
-                            try addUnselectedInterval(out_drawing, sel, index, .{ .a = sel_interval.b, .b = interval.b });
+                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel_interval.b, .b = interval.b });
                         return;
                     }
+                    if (sel_interval.isSingleNode() and op.remove_single_nodes and interval.containsNode(sel_interval.a)) {
+                        if (sel_interval.a != interval.a)
+                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = interval.a, .b = sel.image.pathPrevNode(index, sel_interval.a) });
+                        if (sel_interval.b != interval.b)
+                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel.image.pathNextNode(index, sel_interval.b), .b = interval.b });
+                        return;
+                    }
+                    if (interval.isSingleNode() and sel_interval.containsNode(interval.a))
+                        return;
                 }
             }
             const path = sel.image.getPath(index);
