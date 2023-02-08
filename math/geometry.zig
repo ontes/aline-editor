@@ -76,7 +76,8 @@ pub const Arc = struct {
     pub fn generate(arc: Arc, gen: anytype) !void {
         var pass = gen.begin();
         try pass.add(arc.pos_a, arc.angle);
-        try pass.end(arc.pos_b, null);
+        try pass.add(arc.pos_b, std.math.nan_f32);
+        try pass.end();
     }
 };
 
@@ -126,7 +127,8 @@ pub const Path = struct {
         var i: usize = 0;
         while (i + 1 < path.len()) : (i += 1)
             try pass.add(path.positions[i], path.angles[i]);
-        try pass.end(path.positions[i], if (path.isLooped()) path.angles[i] else null);
+        try pass.add(path.positions[i], if (path.isLooped()) path.angles[i] else std.math.nan_f32);
+        try pass.end();
     }
 };
 
@@ -137,7 +139,8 @@ pub const Circle = struct {
     pub fn generate(circle: Circle, gen: anytype) !void {
         var pass = gen.begin();
         try pass.add(circle.pos + linalg.Vec2{ -circle.radius, 0 }, std.math.pi / 2.0);
-        try pass.end(circle.pos + linalg.Vec2{ circle.radius, 0 }, std.math.pi / 2.0);
+        try pass.add(circle.pos + linalg.Vec2{ circle.radius, 0 }, std.math.pi / 2.0);
+        try pass.end();
     }
 };
 
@@ -150,7 +153,8 @@ pub const Rect = struct {
         try pass.add(rect.pos + linalg.Vec2{ rect.radius[0], rect.radius[1] }, 0);
         try pass.add(rect.pos + linalg.Vec2{ rect.radius[0], -rect.radius[1] }, 0);
         try pass.add(rect.pos + linalg.Vec2{ -rect.radius[0], -rect.radius[1] }, 0);
-        try pass.end(rect.pos + linalg.Vec2{ -rect.radius[0], rect.radius[1] }, 0);
+        try pass.add(rect.pos + linalg.Vec2{ -rect.radius[0], rect.radius[1] }, 0);
+        try pass.end();
     }
 
     pub fn containsPoint(rect: Rect, point: linalg.Vec2) bool {
@@ -172,14 +176,16 @@ pub const Stadium = struct {
             try pass.add(stadium.pos + linalg.Vec2{ stadium.radius[0], diff }, 0);
             try pass.add(stadium.pos + linalg.Vec2{ stadium.radius[0], -diff }, std.math.pi / 2.0);
             try pass.add(stadium.pos + linalg.Vec2{ -stadium.radius[0], -diff }, 0);
-            try pass.end(stadium.pos + linalg.Vec2{ -stadium.radius[0], diff }, std.math.pi / 2.0);
+            try pass.add(stadium.pos + linalg.Vec2{ -stadium.radius[0], diff }, std.math.pi / 2.0);
+            try pass.end();
         } else {
             const diff = stadium.radius[0] - stadium.radius[1];
             var pass = gen.begin();
             try pass.add(stadium.pos + linalg.Vec2{ diff, stadium.radius[1] }, std.math.pi / 2.0);
             try pass.add(stadium.pos + linalg.Vec2{ diff, -stadium.radius[1] }, 0);
             try pass.add(stadium.pos + linalg.Vec2{ -diff, -stadium.radius[1] }, std.math.pi / 2.0);
-            try pass.end(stadium.pos + linalg.Vec2{ -diff, stadium.radius[1] }, 0);
+            try pass.add(stadium.pos + linalg.Vec2{ -diff, stadium.radius[1] }, 0);
+            try pass.end();
         }
     }
 };
@@ -203,7 +209,8 @@ pub const RoundedRect = struct {
             try pass.add(rect.pos + linalg.Vec2{ -rect.radius[0], -(rect.radius[1] - rect.corner_radius) }, 0);
             try pass.add(rect.pos + linalg.Vec2{ -rect.radius[0], rect.radius[1] - rect.corner_radius }, std.math.pi / 4.0);
             try pass.add(rect.pos + linalg.Vec2{ -(rect.radius[0] - rect.corner_radius), rect.radius[1] }, 0);
-            try pass.end(rect.pos + linalg.Vec2{ rect.radius[0] - rect.corner_radius, rect.radius[1] }, std.math.pi / 4.0);
+            try pass.add(rect.pos + linalg.Vec2{ rect.radius[0] - rect.corner_radius, rect.radius[1] }, std.math.pi / 4.0);
+            try pass.end();
         }
     }
 };

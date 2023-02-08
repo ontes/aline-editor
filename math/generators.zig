@@ -60,22 +60,20 @@ pub fn StrokeGenerator(comptime Child: type) type {
                 p.last_angle = angle;
             }
 
-            pub fn end(p: *Pass, pos: linalg.Vec2, angle: ?f32) !void {
-                try p.add(pos, angle orelse 0);
-                if (p.is_second) {
-                    std.debug.assert(angle == null); // single point can't be looped
+            pub fn end(p: Pass) !void {
+                if (p.is_second) { // single node
+                    std.debug.assert(p.last_angle != std.math.nan_f32); // single point can't be looped
                     try p.g.generateCap(p.first_pos, .{ 1, 0 }, .{ 1, 0 });
                     try p.g.generateCap(p.last_pos, .{ -1, 0 }, .{ -1, 0 });
-                } else if (angle == null) {
+                } else if (p.last_angle == std.math.nan_f32) { // looped path
                     try p.g.generateCap(p.first_pos, p.first_dir, p.first_dir);
                     try p.g.generateCap(p.last_pos, p.last_dir, p.last_dir);
                 } else {
-                    const arc = geometry.Arc{ .pos_a = p.last_pos, .pos_b = p.first_pos, .angle = angle.? };
+                    const arc = geometry.Arc{ .pos_a = p.last_pos, .pos_b = p.first_pos, .angle = p.last_angle };
                     try p.g.generateCap(p.last_pos, p.last_dir, arc.dirA());
                     try p.g.generateSegment(arc);
                     try p.g.generateCap(p.first_pos, arc.dirB(), p.first_dir);
                 }
-                p.* = undefined;
             }
         };
 
@@ -100,13 +98,15 @@ pub fn StrokeGenerator(comptime Child: type) type {
                     var pass = g.child.begin();
                     try pass.add(pos + normal_a, geometry.Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, sdir));
                     try pass.add(pos + normal_b, 0);
-                    try pass.end(pos, 0);
+                    try pass.add(pos, 0);
+                    try pass.end();
                 },
                 .bevel => {
                     var pass = g.child.begin();
                     try pass.add(pos + normal_a, 0);
                     try pass.add(pos + normal_b, 0);
-                    try pass.end(pos, 0);
+                    try pass.add(pos, 0);
+                    try pass.end();
                 },
                 .miter => {
                     var pass = g.child.begin();
@@ -119,7 +119,8 @@ pub fn StrokeGenerator(comptime Child: type) type {
                         try pass.add(pos + normal_b + sdir_b, 0);
                     }
                     try pass.add(pos + normal_b, 0);
-                    try pass.end(pos, 0);
+                    try pass.add(pos, 0);
+                    try pass.end();
                 },
             }
         }
@@ -132,7 +133,8 @@ pub fn StrokeGenerator(comptime Child: type) type {
             try pass.add(arc.pos_a - normal_a, 0);
             try pass.add(arc.pos_a + normal_a, arc.angle);
             try pass.add(arc.pos_b - normal_b, 0);
-            try pass.end(arc.pos_b + normal_b, -arc.angle);
+            try pass.add(arc.pos_b + normal_b, -arc.angle);
+            try pass.end();
         }
     };
 }
@@ -160,9 +162,7 @@ pub fn TransformGenerator(comptime Child: type) type {
                 try p.child_pass.add(geometry.transform(p.g.mat, pos), angle); // TODO multiply angle by sign of determinant
             }
 
-            pub fn end(p: *Pass, pos: linalg.Vec2, angle: ?f32) !void {
-                try p.child_pass.end(geometry.transform(p.g.mat, pos), angle);
-            }
+            pub fn end(_: Pass) !void {}
         };
     };
 }

@@ -280,7 +280,8 @@ pub fn generateSelected(sel: ImageSelection, gen: anytype) !void {
         var i: usize = interval.a;
         while (i != interval.b) : (i = path.nextNode(i))
             try pass.add(path.positions[i], path.angles[i]);
-        try pass.end(path.positions[i], null);
+        try pass.add(path.positions[i], std.math.nan_f32);
+        try pass.end();
     }
 }
 

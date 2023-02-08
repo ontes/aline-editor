@@ -117,7 +117,8 @@ pub const Operation = union(enum) {
 
         pub fn generateHelper(op: AddPoint, _: ImageSelection, gen: anytype) !void {
             var pass = getWideStroke().generator(gen).begin();
-            try pass.end(op.position, null);
+            try pass.add(op.position, std.math.nan_f32);
+            try pass.end();
         }
     };
 

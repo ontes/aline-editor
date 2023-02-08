@@ -308,9 +308,7 @@ pub const Generator = struct {
             p.g.buffer.lastEntry().len += 1;
         }
 
-        pub fn end(p: *Pass, pos: @Vector(2, f32), angle: ?f32) !void {
-            std.debug.assert(!p.is_first); // we can't render just one point
-            try p.add(pos, angle.?);
+        pub fn end(p: Pass) !void {
             const bounding_box = math.Arc.boundingBox(.{
                 .pos_a = p.g.buffer.data.items(.position)[p.g.buffer.data.len - 1],
                 .angle = p.g.buffer.data.items(.angle)[p.g.buffer.data.len - 1],
@@ -318,7 +316,6 @@ pub const Generator = struct {
             });
             p.g.buffer.lastEntry().min_pos = @min(p.g.buffer.lastEntry().min_pos, bounding_box[0]);
             p.g.buffer.lastEntry().max_pos = @max(p.g.buffer.lastEntry().max_pos, bounding_box[1]);
-            p.* = undefined;
         }
     };
 };
