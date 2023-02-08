@@ -5,16 +5,16 @@ const render = @import("render");
 const Image = @import("Image.zig");
 
 pub const Interval = struct {
-    a: u32,
-    b: u32,
+    a: usize,
+    b: usize,
 
-    pub fn containsNode(interval: Interval, node: u32) bool {
+    pub fn containsNode(interval: Interval, node: usize) bool {
         const a = node >= interval.a;
         const b = node <= interval.b;
         return if (interval.a <= interval.b) a and b else a or b;
     }
 
-    pub fn containsSegment(interval: Interval, segment: u32) bool {
+    pub fn containsSegment(interval: Interval, segment: usize) bool {
         const a = segment >= interval.a;
         const b = segment < interval.b;
         return if (interval.a <= interval.b) a and b else a or b;
@@ -37,8 +37,8 @@ pub const Interval = struct {
 const ImageSelection = @This();
 
 image: Image,
-loops: std.ArrayListUnmanaged(u32) = .{},
-intervals: std.MultiArrayList(struct { index: u32, interval: Interval }) = .{},
+loops: std.ArrayListUnmanaged(usize) = .{},
+intervals: std.MultiArrayList(struct { index: usize, interval: Interval }) = .{},
 
 pub fn init(allocator: std.mem.Allocator) ImageSelection {
     return .{ .image = Image.init(allocator) };
@@ -68,7 +68,7 @@ pub fn isNothingSelected(sel: ImageSelection) bool {
     return sel.loops.items.len == 0 and sel.intervals.len == 0;
 }
 
-pub fn isNodeSelected(sel: ImageSelection, index: u32, node: u32) bool {
+pub fn isNodeSelected(sel: ImageSelection, index: usize, node: usize) bool {
     for (sel.loops.items) |loop_index| {
         if (loop_index == index)
             return true;
@@ -80,7 +80,7 @@ pub fn isNodeSelected(sel: ImageSelection, index: u32, node: u32) bool {
     return false;
 }
 
-pub fn isSegmentSelected(sel: ImageSelection, index: u32, segment: u32) bool {
+pub fn isSegmentSelected(sel: ImageSelection, index: usize, segment: usize) bool {
     for (sel.loops.items) |loop_index| {
         if (loop_index == index)
             return true;
@@ -92,7 +92,7 @@ pub fn isSegmentSelected(sel: ImageSelection, index: u32, segment: u32) bool {
     return false;
 }
 
-pub fn isPathSelected(sel: ImageSelection, index: u32) bool {
+pub fn isPathSelected(sel: ImageSelection, index: usize) bool {
     if (sel.image.pathIsLooped(index)) {
         for (sel.loops.items) |loop_index| {
             if (loop_index == index)
@@ -108,7 +108,7 @@ pub fn isPathSelected(sel: ImageSelection, index: u32) bool {
     return false;
 }
 
-pub fn isPathPartiallySelected(sel: ImageSelection, index: u32) bool {
+pub fn isPathPartiallySelected(sel: ImageSelection, index: usize) bool {
     for (sel.loops.items) |loop_index| {
         if (loop_index == index)
             return true;
@@ -120,20 +120,20 @@ pub fn isPathPartiallySelected(sel: ImageSelection, index: u32) bool {
     return false;
 }
 
-fn addLoop(sel: *ImageSelection, index: u32) !void {
+fn addLoop(sel: *ImageSelection, index: usize) !void {
     try sel.loops.append(sel.image.allocator, index);
 }
-fn addInterval(sel: *ImageSelection, index: u32, interval: Interval) !void {
+fn addInterval(sel: *ImageSelection, index: usize, interval: Interval) !void {
     try sel.intervals.append(sel.image.allocator, .{ .index = index, .interval = interval });
 }
 
 /// Selects node, assumes it isn't selected
-pub fn selectNode(sel: *ImageSelection, index: u32, node: u32) !void {
+pub fn selectNode(sel: *ImageSelection, index: usize, node: usize) !void {
     try sel.addInterval(index, .{ .a = node, .b = node });
 }
 
 /// Selects segment, assumes it isn't selected
-pub fn selectSegment(sel: *ImageSelection, index: u32, segment: u32) !void {
+pub fn selectSegment(sel: *ImageSelection, index: usize, segment: usize) !void {
     const segment_end = sel.image.pathNextNode(index, segment);
     var a = segment;
     var b = segment_end;
@@ -160,7 +160,7 @@ pub fn selectSegment(sel: *ImageSelection, index: u32, segment: u32) !void {
 }
 
 /// Selects path, assumes no part of it is selected
-pub fn selectPath(sel: *ImageSelection, index: u32) !void {
+pub fn selectPath(sel: *ImageSelection, index: usize) !void {
     if (sel.image.pathIsLooped(index)) {
         try sel.addLoop(index);
     } else {
@@ -169,7 +169,7 @@ pub fn selectPath(sel: *ImageSelection, index: u32) !void {
 }
 
 /// Deselects node. Returns true if node was selected prior to calling.
-pub fn deselectNode(sel: *ImageSelection, index: u32, node: u32) !bool {
+pub fn deselectNode(sel: *ImageSelection, index: usize, node: usize) !bool {
     for (sel.loops.items) |loop_index, i| {
         if (loop_index == index) {
             _ = sel.loops.swapRemove(i);
@@ -194,7 +194,7 @@ pub fn deselectNode(sel: *ImageSelection, index: u32, node: u32) !bool {
 }
 
 /// Deselects segment. Returns true if segment was selected prior to calling.
-pub fn deselectSegment(sel: *ImageSelection, index: u32, segment: u32) !bool {
+pub fn deselectSegment(sel: *ImageSelection, index: usize, segment: usize) !bool {
     const segment_end = sel.image.pathNextNode(index, segment);
     for (sel.loops.items) |loop_index, i| {
         if (loop_index == index) {
@@ -220,7 +220,7 @@ pub fn deselectSegment(sel: *ImageSelection, index: u32, segment: u32) !bool {
 }
 
 /// Deselects path. Returns true if entire path was selected prior to calling.
-pub fn deselectPath(sel: *ImageSelection, index: u32) !bool {
+pub fn deselectPath(sel: *ImageSelection, index: usize) !bool {
     for (sel.loops.items) |loop_index, i| {
         if (loop_index == index) {
             _ = sel.loops.swapRemove(i);
@@ -240,19 +240,19 @@ pub fn deselectPath(sel: *ImageSelection, index: u32) !bool {
 }
 
 /// Selects node if not selected, deselects it otherwise.
-pub fn toggleNode(sel: *ImageSelection, index: u32, node: u32) !void {
+pub fn toggleNode(sel: *ImageSelection, index: usize, node: usize) !void {
     if (!try sel.deselectNode(index, node))
         try sel.selectNode(index, node);
 }
 
 /// Selects segment if not selected, deselects it otherwise.
-pub fn toggleSegment(sel: *ImageSelection, index: u32, segment: u32) !void {
+pub fn toggleSegment(sel: *ImageSelection, index: usize, segment: usize) !void {
     if (!try sel.deselectSegment(index, segment))
         try sel.selectSegment(index, segment);
 }
 
 /// Selects path if not selected, deselects it otherwise.
-pub fn togglePath(sel: *ImageSelection, index: u32) !void {
+pub fn togglePath(sel: *ImageSelection, index: usize) !void {
     if (!try sel.deselectPath(index))
         try sel.selectPath(index);
 }
@@ -264,7 +264,7 @@ pub fn deselectAll(sel: *ImageSelection) void {
 
 pub fn selectAll(sel: *ImageSelection) !void {
     sel.deselectAll();
-    var index: u32 = 0;
+    var index: usize = 0;
     while (index < sel.image.entries.len) : (index += 1)
         try sel.selectPath(index);
 }
@@ -277,7 +277,7 @@ pub fn generateSelected(sel: ImageSelection, gen: anytype) !void {
         const interval = sel.intervals.items(.interval)[j];
         const path = sel.image.getPath(index);
         var pass = gen.begin();
-        var i: u32 = interval.a;
+        var i: usize = interval.a;
         while (i != interval.b) : (i = path.nextNode(i))
             try pass.add(path.positions[i], path.angles[i]);
         try pass.end(path.positions[i], null);
@@ -293,7 +293,7 @@ pub fn transformSelected(sel: *ImageSelection, mat: math.Mat3) void {
         const interval = sel.intervals.items(.interval)[i];
         const positions = sel.image.getPositions(index);
         var node = interval.a;
-        while (node != interval.b) : (node = (node + 1) % @intCast(u32, positions.len))
+        while (node != interval.b) : (node = (node + 1) % positions.len)
             positions[node] = math.transform(mat, positions[node]);
         positions[node] = math.transform(mat, positions[node]);
     }

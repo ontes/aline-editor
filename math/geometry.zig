@@ -84,20 +84,20 @@ pub const Path = struct {
     positions: []const linalg.Vec2,
     angles: []const f32,
 
-    pub inline fn len(path: Path) u32 {
-        return @intCast(u32, path.positions.len);
+    pub inline fn len(path: Path) usize {
+        return path.positions.len;
     }
     pub fn isLooped(path: Path) bool {
         return path.positions.len == path.angles.len;
     }
-    pub fn nextNode(path: Path, node: u32) u32 {
+    pub fn nextNode(path: Path, node: usize) usize {
         return (node + 1) % path.len();
     }
-    pub fn prevNode(path: Path, node: u32) u32 {
+    pub fn prevNode(path: Path, node: usize) usize {
         return (node + path.len() - 1) % path.len();
     }
 
-    pub fn getArc(path: Path, index: u32) Arc {
+    pub fn getArc(path: Path, index: usize) Arc {
         return .{
             .pos_a = path.positions[index],
             .pos_b = path.positions[path.nextNode(index)],
@@ -108,7 +108,7 @@ pub const Path = struct {
     pub fn containsPoint(path: Path, point_pos: linalg.Vec2) bool {
         std.debug.assert(path.isLooped());
         var inside = false;
-        var index: u32 = 0;
+        var index: usize = 0;
         while (index < path.len()) : (index += 1) {
             const arc = path.getArc(index);
             const point_angle = arc.angleOnPoint(point_pos);

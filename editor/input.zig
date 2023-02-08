@@ -165,7 +165,7 @@ fn selectRect(min_pos: math.Vec2, max_pos: math.Vec2) !void {
     const sel = editor.history.get();
     var it = sel.image.pathIterator();
     while (it.next()) |path| {
-        var i: u32 = 0;
+        var i: usize = 0;
         while (i < path.len()) : (i += 1) {
             if (@reduce(.And, path.positions[i] >= min_pos) and
                 @reduce(.And, path.positions[i] <= max_pos) and

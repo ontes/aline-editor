@@ -18,10 +18,10 @@ pub fn shouldSnapToArc(pos: math.Vec2, arc: math.Arc, snap_dist: f32) bool {
 }
 
 const SelectResult = struct {
-    index: u32,
+    index: usize,
     val: union(enum) {
-        node: u32,
-        segment: u32,
+        node: usize,
+        segment: usize,
         loop: void,
     },
 };
@@ -30,7 +30,7 @@ pub fn select(image: Image, pos: math.Vec2, snap_dist: f32) ?SelectResult {
     var best_dist: f32 = snap_dist;
     var it = image.reversePathIterator();
     while (it.next()) |path| {
-        var node: u32 = 0;
+        var node: usize = 0;
         while (node < path.len()) : (node += 1) {
             const dist = distToPoint(pos, path.positions[node]);
             if (dist < best_dist) {
@@ -38,7 +38,7 @@ pub fn select(image: Image, pos: math.Vec2, snap_dist: f32) ?SelectResult {
                 result = .{ .index = it.getIndex(), .val = .{ .node = node } };
             }
         }
-        var segment: u32 = 0;
+        var segment: usize = 0;
         while (segment < path.angles.len) : (segment += 1) {
             const dist = distToArc(pos, path.getArc(segment));
             if (dist < best_dist) {
@@ -54,8 +54,8 @@ pub fn select(image: Image, pos: math.Vec2, snap_dist: f32) ?SelectResult {
 }
 
 const LooseEndResult = struct {
-    index: u32,
-    node: u32,
+    index: usize,
+    node: usize,
 };
 pub fn snapToLooseEnd(image: Image, pos: math.Vec2, snap_dist: f32) ?LooseEndResult {
     var result: ?LooseEndResult = null;
@@ -63,7 +63,7 @@ pub fn snapToLooseEnd(image: Image, pos: math.Vec2, snap_dist: f32) ?LooseEndRes
     var it = image.pathIterator();
     while (it.next()) |path| {
         if (!path.isLooped()) {
-            for ([_]u32{ 0, path.len() - 1 }) |node| {
+            for ([_]usize{ 0, path.len() - 1 }) |node| {
                 const dist = distToPoint(pos, path.positions[node]);
                 if (dist < best_dist) {
                     best_dist = dist;

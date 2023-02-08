@@ -111,7 +111,7 @@ pub const Operation = union(enum) {
         pub fn apply(op: AddPoint, sel: ImageSelection) !ImageSelection {
             var out = try sel.cloneWithNothingSelected();
             try out.image.addPoint(op.position, op.style, op.name);
-            try out.selectNode(@intCast(u32, sel.image.entries.len), 0);
+            try out.selectNode(sel.image.entries.len, 0);
             return out;
         }
 
@@ -247,7 +247,7 @@ pub const Operation = union(enum) {
             return out;
         }
 
-        fn addUnselectedLoop(op: Remove, out_drawing: *Image, sel: ImageSelection, index: u32) !void {
+        fn addUnselectedLoop(op: Remove, out_drawing: *Image, sel: ImageSelection, index: usize) !void {
             for (sel.loops.items) |sel_index| {
                 if (sel_index == index)
                     return;
@@ -267,14 +267,14 @@ pub const Operation = union(enum) {
             }
             const path = sel.image.getPath(index);
             try out_drawing.addPoint(path.positions[0], sel.image.pathStyle(index), sel.image.pathName(index));
-            const new_index = @intCast(u32, out_drawing.entries.len - 1);
-            var i: u32 = 0;
+            const new_index = out_drawing.entries.len - 1;
+            var i: usize = 0;
             while (i + 1 < path.len()) : (i += 1)
                 try out_drawing.appendPoint(new_index, path.positions[i + 1], path.angles[i]);
             out_drawing.loopPath(new_index, path.angles[i]);
         }
 
-        fn addUnselectedInterval(op: Remove, out_drawing: *Image, sel: ImageSelection, index: u32, interval: ImageSelection.Interval) !void {
+        fn addUnselectedInterval(op: Remove, out_drawing: *Image, sel: ImageSelection, index: usize, interval: ImageSelection.Interval) !void {
             for (sel.intervals.items(.index)) |sel_index, i| {
                 if (sel_index == index) {
                     const sel_interval = sel.intervals.items(.interval)[i];
@@ -298,7 +298,7 @@ pub const Operation = union(enum) {
             }
             const path = sel.image.getPath(index);
             try out_drawing.addPoint(path.positions[interval.a], sel.image.pathStyle(index), sel.image.pathName(index));
-            const new_index = @intCast(u32, out_drawing.entries.len - 1);
+            const new_index = out_drawing.entries.len - 1;
             var i = interval.a;
             while (i != interval.b) : (i = path.nextNode(i))
                 try out_drawing.appendPoint(new_index, path.positions[path.nextNode(i)], path.angles[i]);

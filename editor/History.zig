@@ -3,8 +3,8 @@ const ImageSelection = @import("ImageSelection.zig");
 
 const History = @This();
 
-level: u32 = 0,
-max_len: u32 = std.math.maxInt(u32),
+level: usize = 0,
+max_len: usize = std.math.maxInt(usize),
 entries: std.ArrayList(ImageSelection),
 
 pub fn init(allocator: std.mem.Allocator) History {

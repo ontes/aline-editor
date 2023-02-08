@@ -40,13 +40,13 @@ pub fn onFrame() !void {
         const sel = editor.history.get();
         for (sel.image.entries.items(.name)) |name, index| {
             imgui.pushIDInt(@intCast(c_int, index));
-            if (imgui.selectable(@ptrCast([*:0]const u8, &name), sel.isPathPartiallySelected(@intCast(u32, index)), .{}, .{ .x = 0, .y = 0 }) or
-                (imgui.isItemHovered(.{ .allow_when_blocked_by_popup = true }) and imgui.isMouseClicked(.right, false) and !sel.isPathSelected(@intCast(u32, index))))
+            if (imgui.selectable(@ptrCast([*:0]const u8, &name), sel.isPathPartiallySelected(index), .{}, .{ .x = 0, .y = 0 }) or
+                (imgui.isItemHovered(.{ .allow_when_blocked_by_popup = true }) and imgui.isMouseClicked(.right, false) and !sel.isPathSelected(index)))
             {
                 try editor.finishOperation();
                 if (!imgui.isKeyDown(.mod_shift))
                     sel.deselectAll();
-                try sel.togglePath(@intCast(u32, index));
+                try sel.togglePath(index);
                 editor.should_draw_helper = true;
             }
             if ((imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))) {
