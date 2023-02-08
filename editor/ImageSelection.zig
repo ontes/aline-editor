@@ -24,13 +24,13 @@ pub const Interval = struct {
         return interval.a == interval.b;
     }
 
-    pub fn isSingleSegment(interval: Interval, path: math.Path) bool {
+    pub fn isSingleSegment(interval: Interval, path: Image.Path) bool {
         return interval.a + 1 == interval.b or (path.isLooped() and path.nextNode(interval.a) == interval.b);
     }
 
-    pub fn isLooseEnd(interval: Interval, path: math.Path) bool {
+    pub fn isLooseEnd(interval: Interval, path: Image.Path) bool {
         return interval.isSingleNode() and !path.isLooped() and
-            (interval.a == 0 or interval.a == path.len() - 1);
+            (interval.a == 0 or interval.a == path.getNodeCount() - 1);
     }
 };
 
@@ -93,7 +93,7 @@ pub fn isSegmentSelected(sel: ImageSelection, index: usize, segment: usize) bool
 }
 
 pub fn isPathSelected(sel: ImageSelection, index: usize) bool {
-    if (sel.image.pathIsLooped(index)) {
+    if (sel.image.get(index).isLooped()) {
         for (sel.loops.items) |loop_index| {
             if (loop_index == index)
                 return true;
@@ -101,7 +101,7 @@ pub fn isPathSelected(sel: ImageSelection, index: usize) bool {
     } else {
         for (sel.intervals.items(.index)) |interval_index, i| {
             if (interval_index == index and sel.intervals.items(.interval)[i].a == 0 and
-                sel.intervals.items(.interval)[i].b == sel.image.pathLen(interval_index) - 1)
+                sel.intervals.items(.interval)[i].b == sel.image.get(interval_index).getNodeCount() - 1)
                 return true;
         }
     }
@@ -134,7 +134,7 @@ pub fn selectNode(sel: *ImageSelection, index: usize, node: usize) !void {
 
 /// Selects segment, assumes it isn't selected
 pub fn selectSegment(sel: *ImageSelection, index: usize, segment: usize) !void {
-    const segment_end = sel.image.pathNextNode(index, segment);
+    const segment_end = sel.image.get(index).nextNode(segment);
     var a = segment;
     var b = segment_end;
     var i = sel.intervals.len;
@@ -161,10 +161,10 @@ pub fn selectSegment(sel: *ImageSelection, index: usize, segment: usize) !void {
 
 /// Selects path, assumes no part of it is selected
 pub fn selectPath(sel: *ImageSelection, index: usize) !void {
-    if (sel.image.pathIsLooped(index)) {
+    if (sel.image.getComp(index).isLooped()) {
         try sel.addLoop(index);
     } else {
-        try sel.addInterval(index, .{ .a = 0, .b = sel.image.pathLen(index) - 1 });
+        try sel.addInterval(index, .{ .a = 0, .b = sel.image.get(index).getNodeCount() - 1 });
     }
 }
 
@@ -173,7 +173,7 @@ pub fn deselectNode(sel: *ImageSelection, index: usize, node: usize) !bool {
     for (sel.loops.items) |loop_index, i| {
         if (loop_index == index) {
             _ = sel.loops.swapRemove(i);
-            try sel.addInterval(index, .{ .a = sel.image.pathNextNode(index, node), .b = sel.image.pathPrevNode(index, node) });
+            try sel.addInterval(index, .{ .a = sel.image.get(index).nextNode(node), .b = sel.image.get(index).prevNode(node) });
             return true;
         }
     }
@@ -183,9 +183,9 @@ pub fn deselectNode(sel: *ImageSelection, index: usize, node: usize) !bool {
             if (interval.containsNode(node)) {
                 _ = sel.intervals.swapRemove(i);
                 if (interval.a != node)
-                    try sel.addInterval(index, .{ .a = interval.a, .b = sel.image.pathPrevNode(index, node) });
+                    try sel.addInterval(index, .{ .a = interval.a, .b = sel.image.get(index).prevNode(node) });
                 if (interval.b != node)
-                    try sel.addInterval(index, .{ .a = sel.image.pathNextNode(index, node), .b = interval.b });
+                    try sel.addInterval(index, .{ .a = sel.image.get(index).nextNode(node), .b = interval.b });
                 return true;
             }
         }
@@ -195,7 +195,7 @@ pub fn deselectNode(sel: *ImageSelection, index: usize, node: usize) !bool {
 
 /// Deselects segment. Returns true if segment was selected prior to calling.
 pub fn deselectSegment(sel: *ImageSelection, index: usize, segment: usize) !bool {
-    const segment_end = sel.image.pathNextNode(index, segment);
+    const segment_end = sel.image.get(index).nextNode(segment);
     for (sel.loops.items) |loop_index, i| {
         if (loop_index == index) {
             _ = sel.loops.swapRemove(i);
@@ -232,7 +232,7 @@ pub fn deselectPath(sel: *ImageSelection, index: usize) !bool {
         if (sel.intervals.items(.index)[i - 1] == index) {
             const interval = sel.intervals.items(.interval)[i - 1];
             _ = sel.intervals.swapRemove(i - 1);
-            if (!sel.image.pathIsLooped(index) and interval.a == 0 and interval.b == sel.image.pathLen(index) - 1)
+            if (!sel.image.get(index).isLooped() and interval.a == 0 and interval.b == sel.image.get(index).getNodeCount() - 1)
                 return true;
         }
     }
@@ -265,51 +265,51 @@ pub fn deselectAll(sel: *ImageSelection) void {
 pub fn selectAll(sel: *ImageSelection) !void {
     sel.deselectAll();
     var index: usize = 0;
-    while (index < sel.image.entries.len) : (index += 1)
+    while (index < sel.image.getPathCount()) : (index += 1)
         try sel.selectPath(index);
 }
 
 pub fn generateSelected(sel: ImageSelection, gen: anytype) !void {
     for (sel.loops.items) |index| {
-        try sel.image.getPath(index).generate(gen);
+        try sel.image.getComp(index).generate(gen);
     }
     for (sel.intervals.items(.index)) |index, j| {
         const interval = sel.intervals.items(.interval)[j];
-        const path = sel.image.getPath(index);
+        const path = sel.image.getComp(index);
         var pass = gen.begin();
         var i: usize = interval.a;
         while (i != interval.b) : (i = path.nextNode(i))
-            try pass.add(path.positions[i], path.angles[i]);
-        try pass.add(path.positions[i], std.math.nan_f32);
+            try pass.add(path.getPos(i), path.getAng(i));
+        try pass.add(path.getPos(i), std.math.nan_f32);
         try pass.end();
     }
 }
 
 pub fn transformSelected(sel: *ImageSelection, mat: math.Mat3) void {
     for (sel.loops.items) |index| {
-        for (sel.image.getPositions(index)) |*pos|
+        for (sel.image.get(index).getPositions()) |*pos|
             pos.* = math.transform(mat, pos.*);
     }
     for (sel.intervals.items(.index)) |index, i| {
         const interval = sel.intervals.items(.interval)[i];
-        const positions = sel.image.getPositions(index);
+        const path = sel.image.getComp(index);
         var node = interval.a;
-        while (node != interval.b) : (node = (node + 1) % positions.len)
-            positions[node] = math.transform(mat, positions[node]);
-        positions[node] = math.transform(mat, positions[node]);
+        while (node != interval.b) : (node = path.nextNode(node))
+            path.getPositions()[node] = math.transform(mat, path.getPos(node));
+        path.getPositions()[node] = math.transform(mat, path.getPos(node));
     }
 }
 
 pub fn generateTransformEdges(sel: ImageSelection, mat: math.Mat3, gen: anytype) !void {
     for (sel.intervals.items(.index)) |index, j| {
         const interval = sel.intervals.items(.interval)[j];
-        const path = sel.image.getPath(index);
+        const path = sel.image.getComp(index);
         if ((path.isLooped() or interval.a > 0) and !sel.isNodeSelected(index, path.prevNode(interval.a))) {
             var arc = path.getArc(path.prevNode(interval.a));
             arc.pos_b = math.transform(mat, arc.pos_b);
             try arc.generate(gen);
         }
-        if (path.isLooped() or interval.b < path.len() - 1) {
+        if (path.isLooped() or interval.b < path.getNodeCount() - 1) {
             var arc = path.getArc(interval.b);
             arc.pos_a = math.transform(mat, arc.pos_a);
             if (sel.isNodeSelected(index, path.nextNode(interval.b)))

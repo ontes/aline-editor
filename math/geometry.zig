@@ -15,8 +15,8 @@ pub fn transform(mat: linalg.Mat3, vec: linalg.Vec2) linalg.Vec2 {
 
 pub const Arc = struct {
     pos_a: linalg.Vec2,
-    pos_b: linalg.Vec2,
     angle: f32 = std.math.nan_f32,
+    pos_b: linalg.Vec2,
 
     /// Get point on arc, param is in ragnge from 0 to 1
     pub fn point(arc: Arc, param: f32) linalg.Vec2 {
@@ -77,57 +77,6 @@ pub const Arc = struct {
         var pass = gen.begin();
         try pass.add(arc.pos_a, arc.angle);
         try pass.add(arc.pos_b, std.math.nan_f32);
-        try pass.end();
-    }
-};
-
-pub const Path = struct {
-    positions: []const linalg.Vec2,
-    angles: []const f32,
-
-    pub inline fn len(path: Path) usize {
-        return path.positions.len;
-    }
-    pub fn isLooped(path: Path) bool {
-        return path.positions.len == path.angles.len;
-    }
-    pub fn nextNode(path: Path, node: usize) usize {
-        return (node + 1) % path.len();
-    }
-    pub fn prevNode(path: Path, node: usize) usize {
-        return (node + path.len() - 1) % path.len();
-    }
-
-    pub fn getArc(path: Path, index: usize) Arc {
-        return .{
-            .pos_a = path.positions[index],
-            .pos_b = path.positions[path.nextNode(index)],
-            .angle = path.angles[index],
-        };
-    }
-
-    pub fn containsPoint(path: Path, point_pos: linalg.Vec2) bool {
-        std.debug.assert(path.isLooped());
-        var inside = false;
-        var index: usize = 0;
-        while (index < path.len()) : (index += 1) {
-            const arc = path.getArc(index);
-            const point_angle = arc.angleOnPoint(point_pos);
-            if (std.math.sign(point_angle) == std.math.sign(arc.pos_a[0] - point_pos[0]) and
-                std.math.sign(point_angle) == std.math.sign(point_pos[0] - arc.pos_b[0]))
-                inside = !inside;
-            if (std.math.sign(point_angle) == std.math.sign(arc.angle) and @fabs(point_angle) < @fabs(arc.angle))
-                inside = !inside;
-        }
-        return inside;
-    }
-
-    pub fn generate(path: Path, gen: anytype) !void {
-        var pass = gen.begin();
-        var i: usize = 0;
-        while (i + 1 < path.len()) : (i += 1)
-            try pass.add(path.positions[i], path.angles[i]);
-        try pass.add(path.positions[i], if (path.isLooped()) path.angles[i] else std.math.nan_f32);
         try pass.end();
     }
 };

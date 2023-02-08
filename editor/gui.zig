@@ -38,7 +38,7 @@ pub fn onFrame() !void {
     imgui.setNextWindowSize(.{ .x = 256, .y = 256 }, .once);
     if (imgui.begin("Paths", null, .{}) and imgui.beginListBox("path list box", .{ .x = -1, .y = -1 })) {
         const sel = editor.history.get();
-        for (sel.image.entries.items(.name)) |name, index| {
+        for (sel.image.props.items(.name)) |name, index| {
             imgui.pushIDInt(@intCast(c_int, index));
             if (imgui.selectable(@ptrCast([*:0]const u8, &name), sel.isPathPartiallySelected(index), .{}, .{ .x = 0, .y = 0 }) or
                 (imgui.isItemHovered(.{ .allow_when_blocked_by_popup = true }) and imgui.isMouseClicked(.right, false) and !sel.isPathSelected(index)))

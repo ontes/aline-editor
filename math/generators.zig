@@ -62,17 +62,17 @@ pub fn StrokeGenerator(comptime Child: type) type {
 
             pub fn end(p: Pass) !void {
                 if (p.is_second) { // single node
-                    std.debug.assert(p.last_angle != std.math.nan_f32); // single point can't be looped
+                    std.debug.assert(std.math.isNan(p.last_angle)); // single point can't be looped
                     try p.g.generateCap(p.first_pos, .{ 1, 0 }, .{ 1, 0 });
                     try p.g.generateCap(p.last_pos, .{ -1, 0 }, .{ -1, 0 });
-                } else if (p.last_angle == std.math.nan_f32) { // looped path
-                    try p.g.generateCap(p.first_pos, p.first_dir, p.first_dir);
-                    try p.g.generateCap(p.last_pos, p.last_dir, p.last_dir);
-                } else {
+                } else if (!std.math.isNan(p.last_angle)) { // looped path
                     const arc = geometry.Arc{ .pos_a = p.last_pos, .pos_b = p.first_pos, .angle = p.last_angle };
                     try p.g.generateCap(p.last_pos, p.last_dir, arc.dirA());
                     try p.g.generateSegment(arc);
                     try p.g.generateCap(p.first_pos, arc.dirB(), p.first_dir);
+                } else {
+                    try p.g.generateCap(p.first_pos, p.first_dir, p.first_dir);
+                    try p.g.generateCap(p.last_pos, p.last_dir, p.last_dir);
                 }
             }
         };
@@ -159,10 +159,12 @@ pub fn TransformGenerator(comptime Child: type) type {
             child_pass: Child.Pass,
 
             pub fn add(p: *Pass, pos: linalg.Vec2, angle: f32) !void {
-                try p.child_pass.add(geometry.transform(p.g.mat, pos), angle); // TODO multiply angle by sign of determinant
+                return p.child_pass.add(geometry.transform(p.g.mat, pos), angle); // TODO multiply angle by sign of determinant
             }
 
-            pub fn end(_: Pass) !void {}
+            pub fn end(p: Pass) !void {
+                return p.child_pass.end();
+            }
         };
     };
 }

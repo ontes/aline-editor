@@ -163,23 +163,23 @@ fn selectPoint(pos: math.Vec2) !void {
 
 fn selectRect(min_pos: math.Vec2, max_pos: math.Vec2) !void {
     const sel = editor.history.get();
-    var it = sel.image.pathIterator();
+    var it = sel.image.iterator();
     while (it.next()) |path| {
         var i: usize = 0;
-        while (i < path.len()) : (i += 1) {
-            if (@reduce(.And, path.positions[i] >= min_pos) and
-                @reduce(.And, path.positions[i] <= max_pos) and
-                !sel.isNodeSelected(it.getIndex(), i))
-                try sel.selectNode(it.getIndex(), i);
+        while (i < path.getNodeCount()) : (i += 1) {
+            if (@reduce(.And, path.getPos(i) >= min_pos) and
+                @reduce(.And, path.getPos(i) <= max_pos) and
+                !sel.isNodeSelected(path.index, i))
+                try sel.selectNode(path.index, i);
         }
         i = 0;
-        while (i < path.angles.len) : (i += 1) {
+        while (i < path.getSegmentCount()) : (i += 1) {
             const arc = path.getArc(i);
             const arc_bounds = arc.boundingBox();
             if (@reduce(.And, arc_bounds[0] >= min_pos) and
                 @reduce(.And, arc_bounds[1] <= max_pos) and
-                !sel.isSegmentSelected(it.getIndex(), i))
-                try sel.selectSegment(it.getIndex(), i);
+                !sel.isSegmentSelected(path.index, i))
+                try sel.selectSegment(path.index, i);
         }
     }
 }

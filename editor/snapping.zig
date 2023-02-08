@@ -28,26 +28,26 @@ const SelectResult = struct {
 pub fn select(image: Image, pos: math.Vec2, snap_dist: f32) ?SelectResult {
     var result: ?SelectResult = null;
     var best_dist: f32 = snap_dist;
-    var it = image.reversePathIterator();
+    var it = image.reversedIterator();
     while (it.next()) |path| {
         var node: usize = 0;
-        while (node < path.len()) : (node += 1) {
-            const dist = distToPoint(pos, path.positions[node]);
+        while (node < path.getNodeCount()) : (node += 1) {
+            const dist = distToPoint(pos, path.getPos(node));
             if (dist < best_dist) {
                 best_dist = dist;
-                result = .{ .index = it.getIndex(), .val = .{ .node = node } };
+                result = .{ .index = path.index, .val = .{ .node = node } };
             }
         }
         var segment: usize = 0;
-        while (segment < path.angles.len) : (segment += 1) {
+        while (segment < path.getSegmentCount()) : (segment += 1) {
             const dist = distToArc(pos, path.getArc(segment));
             if (dist < best_dist) {
                 best_dist = dist;
-                result = .{ .index = it.getIndex(), .val = .{ .segment = segment } };
+                result = .{ .index = path.index, .val = .{ .segment = segment } };
             }
         }
-        if (path.isLooped() and it.getStyle().isFilled() and path.containsPoint(pos)) {
-            return result orelse .{ .index = it.getIndex(), .val = .loop };
+        if (path.isLooped() and path.getStyle().isFilled() and path.containsPoint(pos)) {
+            return result orelse .{ .index = path.index, .val = .loop };
         }
     }
     return result;
@@ -60,14 +60,14 @@ const LooseEndResult = struct {
 pub fn snapToLooseEnd(image: Image, pos: math.Vec2, snap_dist: f32) ?LooseEndResult {
     var result: ?LooseEndResult = null;
     var best_dist: f32 = snap_dist;
-    var it = image.pathIterator();
+    var it = image.iterator();
     while (it.next()) |path| {
         if (!path.isLooped()) {
-            for ([_]usize{ 0, path.len() - 1 }) |node| {
-                const dist = distToPoint(pos, path.positions[node]);
+            for ([_]usize{ 0, path.getNodeCount() - 1 }) |node| {
+                const dist = distToPoint(pos, path.getPos(node));
                 if (dist < best_dist) {
                     best_dist = dist;
-                    result = .{ .index = it.getIndex(), .node = node };
+                    result = .{ .index = path.index, .node = node };
                 }
             }
         }

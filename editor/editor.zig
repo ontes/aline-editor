@@ -24,7 +24,7 @@ pub var canvas_zoom: f32 = 1;
 const canvas_size = math.Vec2{ 512, 512 };
 const canvas_corner_radius: f32 = 16;
 
-const default_style = Image.PathStyle{
+const default_style = Image.Path.Style{
     .stroke = .{ .width = 2, .cap = .round },
     .fill_color = .{ 0.5, 0.5, 0.5, 1 },
     .stroke_color = .{ 0, 0, 0, 1 },
@@ -57,12 +57,12 @@ pub const Operation = union(enum) {
 
         pub fn init(sel: ImageSelection) ?Rename {
             if (sel.loops.items.len == 1 and sel.intervals.len == 0)
-                return .{ .name = sel.image.pathName(sel.loops.items[0]) };
+                return .{ .name = sel.image.get(sel.loops.items[0]).getName() };
             if (sel.loops.items.len == 0 and sel.intervals.len == 1) {
                 const index = sel.intervals.items(.index)[0];
                 const interval = sel.intervals.items(.interval)[0];
-                if (interval.a == 0 and interval.b == sel.image.pathLen(index) - 1)
-                    return .{ .name = sel.image.pathName(index) };
+                if (interval.a == 0 and interval.b == sel.image.get(index).getNodeCount() - 1)
+                    return .{ .name = sel.image.get(index).getName() };
             }
             return null;
         }
@@ -70,22 +70,22 @@ pub const Operation = union(enum) {
         pub fn apply(op: Rename, sel: ImageSelection) !ImageSelection {
             const index = if (sel.loops.items.len > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
             var out = try sel.clone();
-            out.image.entries.items(.name)[index] = op.name;
+            out.image.props.items(.name)[index] = op.name;
             return out;
         }
     };
 
     pub const ChangeStyle = struct {
-        style: Image.PathStyle,
+        style: Image.Path.Style,
 
         pub fn init(sel: ImageSelection) ?ChangeStyle {
             if (sel.loops.items.len == 1 and sel.intervals.len == 0)
-                return .{ .style = sel.image.pathStyle(sel.loops.items[0]) };
+                return .{ .style = sel.image.get(sel.loops.items[0]).getStyle() };
             if (sel.loops.items.len == 0 and sel.intervals.len == 1) {
                 const index = sel.intervals.items(.index)[0];
                 const interval = sel.intervals.items(.interval)[0];
-                if (interval.a == 0 and interval.b == sel.image.pathLen(index) - 1)
-                    return .{ .style = sel.image.pathStyle(index) };
+                if (interval.a == 0 and interval.b == sel.image.get(index).getNodeCount() - 1)
+                    return .{ .style = sel.image.get(index).getStyle() };
             }
             return null;
         }
@@ -93,15 +93,15 @@ pub const Operation = union(enum) {
         pub fn apply(op: ChangeStyle, sel: ImageSelection) !ImageSelection {
             const index = if (sel.loops.items.len > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
             var out = try sel.clone();
-            out.image.entries.items(.style)[index] = op.style;
+            out.image.props.items(.style)[index] = op.style;
             return out;
         }
     };
 
     pub const AddPoint = struct {
         position: math.Vec2 = .{ 0, 0 },
-        style: Image.PathStyle = default_style,
-        name: Image.PathName = .{ 'u', 'n', 'n', 'a', 'm', 'e', 'd' } ++ .{0} ** 9,
+        style: Image.Path.Style = default_style,
+        name: Image.Path.Name = .{ 'u', 'n', 'n', 'a', 'm', 'e', 'd' } ++ .{0} ** 9,
 
         pub fn init(sel: ImageSelection) ?AddPoint {
             if (!sel.isNothingSelected()) return null;
@@ -111,7 +111,7 @@ pub const Operation = union(enum) {
         pub fn apply(op: AddPoint, sel: ImageSelection) !ImageSelection {
             var out = try sel.cloneWithNothingSelected();
             try out.image.addPoint(op.position, op.style, op.name);
-            try out.selectNode(sel.image.entries.len, 0);
+            try out.selectNode(sel.image.getPathCount(), 0);
             return out;
         }
 
@@ -129,11 +129,10 @@ pub const Operation = union(enum) {
 
         pub fn init(sel: ImageSelection) ?Append {
             if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
-            const index = sel.intervals.items(.index)[0];
-            const path = sel.image.getPath(index);
+            const path = sel.image.getComp(sel.intervals.items(.index)[0]);
             const interval = sel.intervals.items(.interval)[0];
             if (!interval.isLooseEnd(path)) return null;
-            const pos_a = sel.image.getPath(index).positions[interval.a];
+            const pos_a = path.getPos(interval.a);
             return .{ ._pos_a = pos_a, .position = pos_a };
         }
 
@@ -143,19 +142,19 @@ pub const Operation = union(enum) {
 
             var out = try sel.cloneWithNothingSelected();
             if (interval.a == 0)
-                out.image.reversePath(index);
+                out.image.getComp(index).reverse();
             if (snapping.snapToLooseEnd(sel.image, op.position, getSnapDist())) |res| {
                 if (res.index == index) {
                     if (res.node != interval.a)
                         out.image.loopPath(index, op.angle);
                 } else {
                     if (res.node != 0)
-                        out.image.reversePath(res.index);
+                        out.image.getComp(res.index).reverse();
                     _ = out.image.joinPaths(index, res.index, op.angle);
                 }
             } else {
                 try out.image.appendPoint(index, op.position, op.angle);
-                try out.selectNode(index, out.image.pathLen(index) - 1);
+                try out.selectNode(index, out.image.get(index).getNodeCount() - 1);
             }
             return out;
         }
@@ -165,8 +164,8 @@ pub const Operation = union(enum) {
             const interval = sel.intervals.items(.interval)[0];
 
             try math.Arc.generate(.{
-                .pos_a = sel.image.getPath(index).positions[interval.a],
-                .pos_b = if (snapping.snapToLooseEnd(sel.image, op.position, getSnapDist())) |res| sel.image.getPositions(res.index)[res.node] else op.position,
+                .pos_a = sel.image.getComp(index).getPos(interval.a),
+                .pos_b = if (snapping.snapToLooseEnd(sel.image, op.position, getSnapDist())) |res| sel.image.get(res.index).getPos(res.node) else op.position,
                 .angle = op.angle,
             }, getStroke().generator(gen));
         }
@@ -179,12 +178,12 @@ pub const Operation = union(enum) {
 
         pub fn init(sel: ImageSelection) ?Connect {
             if (!(sel.loops.items.len == 0 and sel.intervals.len == 2)) return null;
-            const path_a = sel.image.getPath(sel.intervals.items(.index)[0]);
-            const path_b = sel.image.getPath(sel.intervals.items(.index)[1]);
+            const path_a = sel.image.get(sel.intervals.items(.index)[0]);
+            const path_b = sel.image.get(sel.intervals.items(.index)[1]);
             const interval_a = sel.intervals.items(.interval)[0];
             const interval_b = sel.intervals.items(.interval)[1];
             if (!interval_a.isLooseEnd(path_a) or !interval_b.isLooseEnd(path_b)) return null;
-            return .{ ._pos_a = path_a.positions[interval_a.a], ._pos_b = path_b.positions[interval_b.a] };
+            return .{ ._pos_a = path_a.getPos(interval_a.a), ._pos_b = path_b.getPos(interval_b.a) };
         }
 
         pub fn apply(op: Connect, sel: ImageSelection) !ImageSelection {
@@ -194,9 +193,9 @@ pub const Operation = union(enum) {
             var interval_b = sel.intervals.items(.interval)[1];
 
             var out = try sel.cloneWithNothingSelected();
-            if (interval_a.a == 0) out.image.reversePath(index_a);
-            if (interval_b.a != 0) out.image.reversePath(index_b);
-            const node = out.image.pathLen(index_a) - 1;
+            if (interval_a.a == 0) out.image.get(index_a).reverse();
+            if (interval_b.a != 0) out.image.get(index_b).reverse();
+            const node = out.image.get(index_a).getNodeCount() - 1;
             const index = out.image.joinPaths(index_a, index_b, op.angle);
             try out.selectSegment(index, node);
             return out;
@@ -237,12 +236,12 @@ pub const Operation = union(enum) {
 
         pub fn apply(op: Remove, sel: ImageSelection) !ImageSelection {
             var out = ImageSelection.init(sel.image.allocator);
-            var it = sel.image.pathIterator();
+            var it = sel.image.iterator();
             while (it.next()) |path| {
                 if (path.isLooped()) {
-                    try op.addUnselectedLoop(&out.image, sel, it.getIndex());
+                    try op.addUnselectedLoop(&out.image, sel, path.index);
                 } else {
-                    try op.addUnselectedInterval(&out.image, sel, it.getIndex(), .{ .a = 0, .b = path.len() - 1 });
+                    try op.addUnselectedInterval(&out.image, sel, path.index, .{ .a = 0, .b = path.getNodeCount() - 1 });
                 }
             }
             return out;
@@ -261,18 +260,18 @@ pub const Operation = union(enum) {
                         return;
                     }
                     if (sel_interval.isSingleNode() and op.remove_single_nodes) {
-                        try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel.image.pathNextNode(index, sel_interval.b), .b = sel.image.pathPrevNode(index, sel_interval.a) });
+                        try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel.image.get(index).nextNode(sel_interval.b), .b = sel.image.get(index).prevNode(sel_interval.a) });
                         return;
                     }
                 }
             }
-            const path = sel.image.getPath(index);
-            try out_drawing.addPoint(path.positions[0], sel.image.pathStyle(index), sel.image.pathName(index));
-            const new_index = out_drawing.entries.len - 1;
+            const path = sel.image.getComp(index);
+            try out_drawing.addPoint(path.getPos(0), path.getStyle(), path.getName());
+            const new_index = out_drawing.getPathCount() - 1;
             var i: usize = 0;
-            while (i + 1 < path.len()) : (i += 1)
-                try out_drawing.appendPoint(new_index, path.positions[i + 1], path.angles[i]);
-            out_drawing.loopPath(new_index, path.angles[i]);
+            while (i + 1 < path.getNodeCount()) : (i += 1)
+                try out_drawing.appendPoint(new_index, path.getPos(i + 1), path.getAng(i));
+            out_drawing.loopPath(new_index, path.getAng(i));
         }
 
         fn addUnselectedInterval(op: Remove, out_drawing: *Image, sel: ImageSelection, index: usize, interval: ImageSelection.Interval) !void {
@@ -288,21 +287,21 @@ pub const Operation = union(enum) {
                     }
                     if (sel_interval.isSingleNode() and op.remove_single_nodes and interval.containsNode(sel_interval.a)) {
                         if (sel_interval.a != interval.a)
-                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = interval.a, .b = sel.image.pathPrevNode(index, sel_interval.a) });
+                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = interval.a, .b = sel.image.get(index).prevNode(sel_interval.a) });
                         if (sel_interval.b != interval.b)
-                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel.image.pathNextNode(index, sel_interval.b), .b = interval.b });
+                            try op.addUnselectedInterval(out_drawing, sel, index, .{ .a = sel.image.get(index).nextNode(sel_interval.b), .b = interval.b });
                         return;
                     }
                     if (interval.isSingleNode() and sel_interval.containsNode(interval.a))
                         return;
                 }
             }
-            const path = sel.image.getPath(index);
-            try out_drawing.addPoint(path.positions[interval.a], sel.image.pathStyle(index), sel.image.pathName(index));
-            const new_index = out_drawing.entries.len - 1;
+            const path = sel.image.getComp(index);
+            try out_drawing.addPoint(path.getPos(interval.a), path.getStyle(), path.getName());
+            const new_index = out_drawing.getPathCount() - 1;
             var i = interval.a;
             while (i != interval.b) : (i = path.nextNode(i))
-                try out_drawing.appendPoint(new_index, path.positions[path.nextNode(i)], path.angles[i]);
+                try out_drawing.appendPoint(new_index, path.getPos(path.nextNode(i)), path.getAng(i));
         }
     };
 
@@ -313,7 +312,7 @@ pub const Operation = union(enum) {
 
         pub fn init(sel: ImageSelection) ?ChangeAngle {
             if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
-            const path = sel.image.getPath(sel.intervals.items(.index)[0]);
+            const path = sel.image.get(sel.intervals.items(.index)[0]);
             const interval = sel.intervals.items(.interval)[0];
             if (!interval.isSingleSegment(path)) return null;
             const arc = path.getArc(interval.a);
@@ -323,14 +322,13 @@ pub const Operation = union(enum) {
         pub fn apply(op: ChangeAngle, sel: ImageSelection) !ImageSelection {
             var out = try sel.clone();
             const interval = sel.intervals.items(.interval)[0];
-            out.image.getAngles(sel.intervals.items(.index)[0])[interval.a] = op.angle;
+            out.image.get(sel.intervals.items(.index)[0]).getAngles()[interval.a] = op.angle;
             return out;
         }
 
         pub fn generateHelper(op: ChangeAngle, sel: ImageSelection, gen: anytype) !void {
-            const path = sel.image.getPath(sel.intervals.items(.index)[0]);
             const interval = sel.intervals.items(.interval)[0];
-            var arc = path.getArc(interval.a);
+            var arc = sel.image.get(sel.intervals.items(.index)[0]).getArc(interval.a);
             arc.angle = op.angle;
             try arc.generate(getStroke().generator(gen));
         }

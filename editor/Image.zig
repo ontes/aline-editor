@@ -2,23 +2,11 @@ const std = @import("std");
 const math = @import("math");
 const render = @import("render");
 
-pub const PathStyle = struct {
-    fill_color: [4]f32,
-    stroke_color: [4]f32,
-    stroke: math.Stroke,
-
-    pub fn isFilled(style: PathStyle) bool {
-        return style.fill_color[3] > 0;
-    }
-};
-
-pub const PathName = [16]u8;
-
 const Image = @This();
 
 allocator: std.mem.Allocator,
-entries: std.MultiArrayList(struct { len: usize, looped: bool, style: PathStyle, name: PathName }) = .{},
-data: std.MultiArrayList(struct { position: math.Vec2, angle: f32 = 0 }) = .{},
+props: std.MultiArrayList(Path.Properties) = .{},
+nodes: std.MultiArrayList(Path.Node) = .{},
 
 pub inline fn init(allocator: std.mem.Allocator) Image {
     return .{ .allocator = allocator };
@@ -26,105 +14,174 @@ pub inline fn init(allocator: std.mem.Allocator) Image {
 
 pub fn deinit(image: Image) void {
     var drawing_ = image;
-    drawing_.entries.deinit(image.allocator);
-    drawing_.data.deinit(image.allocator);
-}
-
-pub fn pathLen(image: Image, index: usize) usize {
-    return image.entries.items(.len)[index];
-}
-pub fn pathIsLooped(image: Image, index: usize) bool {
-    return image.entries.items(.looped)[index];
-}
-pub fn pathStyle(image: Image, index: usize) PathStyle {
-    return image.entries.items(.style)[index];
-}
-pub fn pathName(image: Image, index: usize) [16]u8 {
-    return image.entries.items(.name)[index];
-}
-
-pub fn pathNextNode(image: Image, index: usize, node: usize) usize {
-    return (node + 1) % image.pathLen(index);
-}
-pub fn pathPrevNode(image: Image, index: usize, node: usize) usize {
-    return (node + image.pathLen(index) - 1) % image.pathLen(index);
+    drawing_.props.deinit(image.allocator);
+    drawing_.nodes.deinit(image.allocator);
 }
 
 fn getDataOffset(image: Image, index: usize) usize {
     var offset: usize = 0;
-    for (image.entries.items(.len)[0..index]) |len|
-        offset += len;
+    for (image.props.items(.node_count)[0..index]) |count|
+        offset += count;
     return offset;
 }
-fn pathAnglesLen(image: Image, index: usize) usize {
-    return if (image.pathIsLooped(index)) image.pathLen(index) else image.pathLen(index) - 1;
+
+pub fn getPathCount(image: Image) usize {
+    return image.props.len;
 }
 
-pub fn getPositions(image: Image, index: usize) []math.Vec2 {
-    const offset = image.getDataOffset(index);
-    return image.data.items(.position)[offset .. offset + image.pathLen(index)];
+pub const Path = struct {
+    pub const Style = struct {
+        fill_color: [4]f32,
+        stroke_color: [4]f32,
+        stroke: math.Stroke,
+
+        pub fn isFilled(style: Style) bool {
+            return style.fill_color[3] > 0;
+        }
+    };
+
+    pub const Name = [16]u8;
+
+    pub const Properties = struct {
+        node_count: usize,
+        style: Path.Style,
+        name: Path.Name,
+    };
+
+    pub const Node = struct {
+        pos: math.Vec2,
+        angle: f32 = std.math.nan_f32,
+    };
+
+    image: *const Image,
+    index: usize,
+    offset: ?usize = null,
+
+    pub fn getNodeCount(p: Path) usize {
+        return p.image.props.items(.node_count)[p.index];
+    }
+    pub fn getStyle(p: Path) Style {
+        return p.image.props.items(.style)[p.index];
+    }
+    pub fn getName(p: Path) Name {
+        return p.image.props.items(.name)[p.index];
+    }
+
+    pub fn nextNode(p: Path, node_index: usize) usize {
+        return (node_index + 1) % p.getNodeCount();
+    }
+    pub fn prevNode(p: Path, node_index: usize) usize {
+        return (node_index + p.getNodeCount() - 1) % p.getNodeCount();
+    }
+
+    fn getDataOffset(p: Path) usize {
+        return p.offset orelse p.image.getDataOffset(p.index);
+    }
+
+    pub fn getPositions(p: Path) []math.Vec2 {
+        const offset = p.getDataOffset();
+        return p.image.nodes.items(.pos)[offset .. offset + p.getNodeCount()];
+    }
+    pub fn getAngles(p: Path) []f32 {
+        const offset = p.getDataOffset();
+        return p.image.nodes.items(.angle)[offset .. offset + p.getNodeCount()];
+    }
+
+    pub fn getPos(p: Path, index: usize) math.Vec2 {
+        return p.getPositions()[index];
+    }
+    pub fn getAng(p: Path, index: usize) f32 {
+        return p.getAngles()[index];
+    }
+    pub fn getArc(p: Path, index: usize) math.Arc {
+        std.debug.assert(p.offset != null);
+        return .{
+            .pos_a = p.getPos(index),
+            .angle = p.getAng(index),
+            .pos_b = p.getPos(p.nextNode(index)),
+        };
+    }
+
+    pub fn isLooped(p: Path) bool {
+        std.debug.assert(p.offset != null);
+        return !std.math.isNan(p.getAng(p.getNodeCount() - 1));
+    }
+    pub fn getSegmentCount(p: Path) usize {
+        std.debug.assert(p.offset != null);
+        return if (p.isLooped()) p.getNodeCount() else p.getNodeCount() - 1;
+    }
+
+    pub fn generate(p: Path, gen: anytype) !void {
+        std.debug.assert(p.offset != null);
+        var pass = gen.begin();
+        var i: usize = 0;
+        while (i < p.getNodeCount()) : (i += 1)
+            try pass.add(p.getPos(i), p.getAng(i));
+        try pass.end();
+    }
+
+    pub fn draw(p: Path, buffer: *render.Buffer) !void {
+        const style = p.getStyle();
+        if (p.isLooped())
+            try p.generate(buffer.generator(style.fill_color));
+        try p.generate(style.stroke.generator(buffer.generator(style.stroke_color)));
+    }
+
+    // In-situ reverse path data (shoud not change the path visually)
+    pub fn reverse(p: Path) void {
+        std.debug.assert(p.offset != null);
+        const positions = p.getPositions();
+        const angles = p.getAngles();
+        var i: usize = 0;
+        while (i < p.getNodeCount() / 2) : (i += 1) {
+            std.mem.swap(math.Vec2, &positions[i], &positions[p.getNodeCount() - i - 1]);
+            std.mem.swap(f32, &angles[i], &angles[p.getNodeCount() - i - 2]);
+        }
+        for (angles) |*angle|
+            angle.* = -angle.*;
+    }
+
+    // TODO: rework this into a generator
+    pub fn containsPoint(p: Path, point_pos: math.Vec2) bool {
+        std.debug.assert(p.offset != null);
+        std.debug.assert(p.isLooped());
+        var inside = false;
+        var index: usize = 0;
+        while (index < p.getSegmentCount()) : (index += 1) {
+            const arc = p.getArc(index);
+            const point_angle = arc.angleOnPoint(point_pos);
+            if (std.math.sign(point_angle) == std.math.sign(arc.pos_a[0] - point_pos[0]) and
+                std.math.sign(point_angle) == std.math.sign(point_pos[0] - arc.pos_b[0]))
+                inside = !inside;
+            if (std.math.sign(point_angle) == std.math.sign(arc.angle) and @fabs(point_angle) < @fabs(arc.angle))
+                inside = !inside;
+        }
+        return inside;
+    }
+};
+
+pub fn get(image: *const Image, index: usize) Path {
+    return .{ .image = image, .index = index };
 }
-pub fn getAngles(image: Image, index: usize) []f32 {
-    const offset = image.getDataOffset(index);
-    return image.data.items(.angle)[offset .. offset + image.pathAnglesLen(index)];
-}
-pub fn getPath(image: Image, index: usize) math.Path {
-    return .{ .positions = image.getPositions(index), .angles = image.getAngles(index) };
+pub fn getComp(image: *const Image, index: usize) Path {
+    return .{ .image = image, .index = index, .offset = image.getDataOffset(index) };
 }
 
-pub fn addPoint(image: *Image, position: math.Vec2, style: PathStyle, name: PathName) !void {
-    try image.data.append(image.allocator, .{ .position = position });
-    try image.entries.append(image.allocator, .{ .len = 1, .looped = false, .style = style, .name = name });
+pub fn addPoint(image: *Image, pos: math.Vec2, style: Path.Style, name: Path.Name) !void {
+    try image.nodes.append(image.allocator, .{ .pos = pos });
+    try image.props.append(image.allocator, .{ .node_count = 1, .style = style, .name = name });
 }
 
-pub fn appendPoint(image: *Image, index: usize, position: math.Vec2, angle: f32) !void {
+pub fn appendPoint(image: *Image, index: usize, pos: math.Vec2, angle: f32) !void {
     const offset = image.getDataOffset(index);
-    image.data.items(.angle)[offset + image.pathLen(index) - 1] = angle;
-    try image.data.insert(image.allocator, offset + image.pathLen(index), .{ .position = position });
-    image.entries.items(.len)[index] += 1;
+    image.nodes.items(.angle)[offset + image.get(index).getNodeCount() - 1] = angle;
+    try image.nodes.insert(image.allocator, offset + image.get(index).getNodeCount(), .{ .pos = pos });
+    image.props.items(.node_count)[index] += 1;
 }
 
 /// Add segment from last to first node
 pub fn loopPath(image: *Image, index: usize, angle: f32) void {
-    image.data.items(.angle)[image.getDataOffset(index) + image.pathLen(index) - 1] = angle;
-    image.entries.items(.looped)[index] = true;
-}
-
-pub fn remove(image: *Image, index: usize) void {
-    const offset = image.getDataOffset(index);
-    const len = image.pathLen(index);
-    std.mem.copy(image.data.items(.position)[offset..], image.data.items(.position)[offset + len ..]);
-    std.mem.copy(image.data.items(.angle)[offset..], image.data.items(.angle)[offset + len ..]);
-    image.data.shrinkRetainingCapacity(image.data.len - len);
-    image.entries.orderedRemove(index);
-}
-
-pub fn reversePath(image: Image, index: usize) void {
-    const positions = image.getPositions(index);
-    const angles = image.getAngles(index);
-    std.mem.reverse(math.Vec2, if (positions.len == angles.len) positions[0 .. positions.len - 1] else positions);
-    std.mem.reverse(f32, angles);
-    for (angles) |*angle|
-        angle.* = -angle.*;
-}
-
-pub fn reorder(image: *Image, index: usize, new_index: usize) void {
-    if (new_index < index) { // lower
-        const from = image.getDataOffset(new_index);
-        const to = image.getDataOffset(index) + image.pathLen(index);
-        const amount = image.getDataOffset(index) - image.getDataOffset(new_index);
-        std.mem.rotate(math.Vec2, image.data.items(.position)[from..to], amount);
-        std.mem.rotate(f32, image.data.items(.angle)[from..to], amount);
-    } else if (new_index > index) { // raise
-        const from = image.getDataOffset(index);
-        const to = image.getDataOffset(new_index) + image.pathLen(new_index);
-        const amount = image.pathLen(index);
-        std.mem.rotate(math.Vec2, image.data.items(.position)[from..to], amount);
-        std.mem.rotate(f32, image.data.items(.angle)[from..to], amount);
-    }
-    const entry = image.entries.get(index);
-    image.entries.orderedRemove(index);
-    image.entries.insertAssumeCapacity(new_index, entry);
+    image.nodes.items(.angle)[image.getDataOffset(index) + image.get(index).getNodeCount() - 1] = angle;
 }
 
 pub fn joinPaths(image: *Image, index_a: usize, index_b: usize, angle: f32) usize {
@@ -133,98 +190,64 @@ pub fn joinPaths(image: *Image, index_a: usize, index_b: usize, angle: f32) usiz
         return index_a;
     }
     const new_index = if (index_a < index_b) index_a else index_a - 1;
-    image.reorder(index_b, new_index + 1);
-    image.data.items(.angle)[image.getDataOffset(new_index) + image.pathLen(new_index) - 1] = angle;
-    image.entries.items(.len)[new_index] += image.entries.items(.len)[new_index + 1];
-    image.entries.orderedRemove(new_index + 1);
+    // image.reorder(index_b, new_index + 1);
+    // image.nodes.items[image.getDataOffset(new_index) + image.get(new_index).getNodeCount() - 1].angle = angle;
+    // image.props.items(.node_count)[new_index] += image.props.items(.node_count)[new_index + 1];
+    // image.props.orderedRemove(new_index + 1);
     return new_index;
 }
 
-/// Split segment in two
-// pub fn splitSegment(image: *Image, index: usize, segment: usize, param: f32) !void {
-//     const arc = image.getPath(index).getArc(segment);
-
-//     try image.positions.insert(image.allocator, image.getPosOffset(index) + segment + 1, arc.point(param));
-//     image.entries.items(.pos_len)[index] += 1;
-
-//     image.positions.items[image.getAngOffset(index) + segment] = param * arc.angle;
-//     try image.positions.insert(image.allocator, image.getAngOffset(index) + segment + 1, (1 - param) * arc.angle);
-//     image.entries.items(.ang_len)[index] += 1;
-// }
-
 pub fn clear(image: *Image) void {
-    image.data.shrinkRetainingCapacity(0);
-    image.entries.shrinkRetainingCapacity(0);
+    image.nodes.shrinkRetainingCapacity(0);
+    image.props.shrinkRetainingCapacity(0);
 }
 
 pub fn clone(image: Image) !Image {
     var _drawing = image;
     return .{
         .allocator = image.allocator,
-        .entries = try _drawing.entries.clone(image.allocator),
-        .data = try _drawing.data.clone(image.allocator),
+        .props = try _drawing.props.clone(image.allocator),
+        .nodes = try _drawing.nodes.clone(image.allocator),
     };
 }
 
-const PathIterator = struct {
+const Iterator = struct {
     image: *const Image,
-    i: usize = 0,
+    index: usize = 0,
     offset: usize = 0,
 
-    pub fn next(it: *PathIterator) ?math.Path {
-        if (it.i >= it.image.entries.len)
+    pub fn next(it: *Iterator) ?Path {
+        if (it.index >= it.image.props.len)
             return null;
-        const path = math.Path{
-            .positions = it.image.data.items(.position)[it.offset .. it.offset + it.image.pathLen(it.i)],
-            .angles = it.image.data.items(.angle)[it.offset .. it.offset + it.image.pathAnglesLen(it.i)],
-        };
-        it.offset += it.image.pathLen(it.i);
-        it.i += 1;
+        const path = Path{ .image = it.image, .index = it.index, .offset = it.offset };
+        it.offset += it.image.get(it.index).getNodeCount();
+        it.index += 1;
         return path;
     }
-    pub fn getIndex(it: *PathIterator) usize {
-        return it.i - 1;
-    }
-    pub fn getStyle(it: *PathIterator) PathStyle {
-        return it.image.entries.items(.style)[it.getIndex()];
-    }
 };
-pub inline fn pathIterator(image: *const Image) PathIterator {
+pub inline fn iterator(image: *const Image) Iterator {
     return .{ .image = image };
 }
 
-const ReversePathIterator = struct {
+const ReversedIterator = struct {
     image: *const Image,
-    i: usize,
+    index: usize,
     offset: usize,
 
-    pub fn next(it: *ReversePathIterator) ?math.Path {
-        if (it.i == 0)
+    pub fn next(it: *ReversedIterator) ?Path {
+        if (it.index == 0)
             return null;
-        it.i -= 1;
-        it.offset -= it.image.pathLen(it.i);
-        return .{
-            .positions = it.image.data.items(.position)[it.offset .. it.offset + it.image.pathLen(it.i)],
-            .angles = it.image.data.items(.angle)[it.offset .. it.offset + it.image.pathAnglesLen(it.i)],
-        };
-    }
-    pub fn getIndex(it: *ReversePathIterator) usize {
-        return it.i;
-    }
-    pub fn getStyle(it: *ReversePathIterator) PathStyle {
-        return it.image.entries.items(.style)[it.getIndex()];
+        it.index -= 1;
+        it.offset -= it.image.get(it.index).getNodeCount();
+        return Path{ .image = it.image, .index = it.index, .offset = it.offset };
     }
 };
-pub fn reversePathIterator(image: *const Image) ReversePathIterator {
-    return .{ .image = image, .i = image.entries.len, .offset = image.data.len };
+pub fn reversedIterator(image: *const Image) ReversedIterator {
+    return .{ .image = image, .index = image.props.len, .offset = image.nodes.len };
 }
 
 pub fn draw(image: Image, buffer: *render.Buffer) !void {
-    var it = image.pathIterator();
-    while (it.next()) |path| {
-        const style = it.getStyle();
-        if (path.isLooped())
-            try path.generate(buffer.generator(style.fill_color));
-        try path.generate(style.stroke.generator(buffer.generator(style.stroke_color)));
-    }
+    var it = image.iterator();
+    while (it.next()) |path|
+        try path.draw(buffer);
 }
