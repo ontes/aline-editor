@@ -16,7 +16,7 @@ pub fn transform(mat: linalg.Mat3, vec: linalg.Vec2) linalg.Vec2 {
 pub const Arc = struct {
     pos_a: linalg.Vec2,
     pos_b: linalg.Vec2,
-    angle: f32 = 0,
+    angle: f32 = std.math.nan_f32,
 
     /// Get point on arc, param is in ragnge from 0 to 1
     pub fn point(arc: Arc, param: f32) linalg.Vec2 {
