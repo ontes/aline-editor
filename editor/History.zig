@@ -12,8 +12,8 @@ pub fn init(allocator: std.mem.Allocator) History {
 }
 
 pub fn deinit(history: History) void {
-    for (history.entries.items) |*sel|
-        sel.deinit();
+    for (history.entries.items) |*is|
+        is.deinit();
     history.entries.deinit();
 }
 
@@ -25,11 +25,11 @@ pub fn getPrev(history: History) *ImageSelection {
     return &history.entries.items[history.entries.items.len - 2 - history.level];
 }
 
-pub fn add(history: *History, sel: ImageSelection) !void {
+pub fn add(history: *History, is: ImageSelection) !void {
     while (history.level > 0) : (history.level -= 1)
         history.entries.pop().deinit();
 
-    try history.entries.append(sel);
+    try history.entries.append(is);
 
     while (history.entries.items.len > history.max_len)
         history.entries.orderedRemove(0).deinit();

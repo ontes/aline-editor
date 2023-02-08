@@ -25,7 +25,7 @@ fn getDataOffset(image: Image, index: usize) usize {
     return offset;
 }
 
-pub fn getPathCount(image: Image) usize {
+pub fn len(image: Image) usize {
     return image.props.len;
 }
 
@@ -103,7 +103,6 @@ pub const Path = struct {
     }
 
     pub fn isLooped(p: Path) bool {
-        std.debug.assert(p.offset != null);
         return !std.math.isNan(p.getAng(p.getNodeCount() - 1));
     }
     pub fn getSegmentCount(p: Path) usize {

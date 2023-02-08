@@ -149,28 +149,28 @@ fn beginOperation(key: platform.Key) !void {
 }
 
 fn selectPoint(pos: math.Vec2) !void {
-    const sel = editor.history.get();
-    if (snapping.select(sel.image, pos, editor.getSnapDist())) |s| {
+    const is = editor.history.get();
+    if (snapping.select(is.image, pos, editor.getSnapDist())) |s| {
         if (ctrl_pressed) {
-            try sel.togglePath(s.index);
+            try is.togglePath(s.index);
         } else switch (s.val) {
-            .node => |node| try sel.toggleNode(s.index, node),
-            .segment => |segment| try sel.toggleSegment(s.index, segment),
-            .loop => try sel.togglePath(s.index),
+            .node => |node| try is.toggleNode(s.index, node),
+            .segment => |segment| try is.toggleSegment(s.index, segment),
+            .loop => try is.togglePath(s.index),
         }
     }
 }
 
 fn selectRect(min_pos: math.Vec2, max_pos: math.Vec2) !void {
-    const sel = editor.history.get();
-    var it = sel.image.iterator();
+    const is = editor.history.get();
+    var it = is.image.iterator();
     while (it.next()) |path| {
         var i: usize = 0;
         while (i < path.getNodeCount()) : (i += 1) {
             if (@reduce(.And, path.getPos(i) >= min_pos) and
                 @reduce(.And, path.getPos(i) <= max_pos) and
-                !sel.isNodeSelected(path.index, i))
-                try sel.selectNode(path.index, i);
+                !is.isNodeSelected(path.index, i))
+                try is.selectNode(path.index, i);
         }
         i = 0;
         while (i < path.getSegmentCount()) : (i += 1) {
@@ -178,8 +178,8 @@ fn selectRect(min_pos: math.Vec2, max_pos: math.Vec2) !void {
             const arc_bounds = arc.boundingBox();
             if (@reduce(.And, arc_bounds[0] >= min_pos) and
                 @reduce(.And, arc_bounds[1] <= max_pos) and
-                !sel.isSegmentSelected(path.index, i))
-                try sel.selectSegment(path.index, i);
+                !is.isSegmentSelected(path.index, i))
+                try is.selectSegment(path.index, i);
         }
     }
 }
