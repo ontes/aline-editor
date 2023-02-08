@@ -71,12 +71,12 @@ pub const PathSelection = struct {
 };
 
 pub fn get(is: *const ImageSelection, i: usize) PathSelection {
-    const data = is.props.get(i);
-    return .{ .path = is.image.get(data.path_index), .a = data.a, .b = data.b };
+    const props = is.props.get(i);
+    return .{ .path = is.image.get(props.path_index), .a = props.a, .b = props.b };
 }
 pub fn getComp(is: *const ImageSelection, i: usize) PathSelection {
-    const data = is.props.get(i);
-    return .{ .path = is.image.getComp(data.path_index), .a = data.a, .b = data.b };
+    const props = is.props.get(i);
+    return .{ .path = is.image.getComp(props.path_index), .a = props.a, .b = props.b };
 }
 
 pub const Iterator = struct {
