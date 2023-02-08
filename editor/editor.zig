@@ -56,9 +56,9 @@ pub const Operation = union(enum) {
         name: [16]u8,
 
         pub fn init(sel: ImageSelection) ?Rename {
-            if (sel.loops.items.len == 1 and sel.intervals.len == 0)
+            if (sel.getLoopCount() == 1 and sel.getIntervalCount() == 0)
                 return .{ .name = sel.image.get(sel.loops.items[0]).getName() };
-            if (sel.loops.items.len == 0 and sel.intervals.len == 1) {
+            if (sel.getLoopCount() == 0 and sel.getIntervalCount() == 1) {
                 const index = sel.intervals.items(.index)[0];
                 const interval = sel.intervals.items(.interval)[0];
                 if (interval.a == 0 and interval.b == sel.image.get(index).getNodeCount() - 1)
@@ -68,7 +68,7 @@ pub const Operation = union(enum) {
         }
 
         pub fn apply(op: Rename, sel: ImageSelection) !ImageSelection {
-            const index = if (sel.loops.items.len > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
+            const index = if (sel.getLoopCount() > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
             var out = try sel.clone();
             out.image.props.items(.name)[index] = op.name;
             return out;
@@ -79,9 +79,9 @@ pub const Operation = union(enum) {
         style: Image.Path.Style,
 
         pub fn init(sel: ImageSelection) ?ChangeStyle {
-            if (sel.loops.items.len == 1 and sel.intervals.len == 0)
+            if (sel.getLoopCount() == 1 and sel.getIntervalCount() == 0)
                 return .{ .style = sel.image.get(sel.loops.items[0]).getStyle() };
-            if (sel.loops.items.len == 0 and sel.intervals.len == 1) {
+            if (sel.getLoopCount() == 0 and sel.getIntervalCount() == 1) {
                 const index = sel.intervals.items(.index)[0];
                 const interval = sel.intervals.items(.interval)[0];
                 if (interval.a == 0 and interval.b == sel.image.get(index).getNodeCount() - 1)
@@ -91,7 +91,7 @@ pub const Operation = union(enum) {
         }
 
         pub fn apply(op: ChangeStyle, sel: ImageSelection) !ImageSelection {
-            const index = if (sel.loops.items.len > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
+            const index = if (sel.getLoopCount() > 0) sel.loops.items[0] else sel.intervals.items(.index)[0];
             var out = try sel.clone();
             out.image.props.items(.style)[index] = op.style;
             return out;
@@ -104,7 +104,7 @@ pub const Operation = union(enum) {
         name: Image.Path.Name = .{ 'u', 'n', 'n', 'a', 'm', 'e', 'd' } ++ .{0} ** 9,
 
         pub fn init(sel: ImageSelection) ?AddPoint {
-            if (!sel.isNothingSelected()) return null;
+            if (sel.getTotalCount() > 0) return null;
             return .{};
         }
 
@@ -128,7 +128,7 @@ pub const Operation = union(enum) {
         _pos_a: math.Vec2,
 
         pub fn init(sel: ImageSelection) ?Append {
-            if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
+            if (!(sel.getLoopCount() == 0 and sel.getIntervalCount() == 1)) return null;
             const path = sel.image.getComp(sel.intervals.items(.index)[0]);
             const interval = sel.intervals.items(.interval)[0];
             if (!interval.isLooseEnd(path)) return null;
@@ -177,7 +177,7 @@ pub const Operation = union(enum) {
         _pos_b: math.Vec2,
 
         pub fn init(sel: ImageSelection) ?Connect {
-            if (!(sel.loops.items.len == 0 and sel.intervals.len == 2)) return null;
+            if (!(sel.getLoopCount() == 0 and sel.getIntervalCount() == 2)) return null;
             const path_a = sel.image.get(sel.intervals.items(.index)[0]);
             const path_b = sel.image.get(sel.intervals.items(.index)[1]);
             const interval_a = sel.intervals.items(.interval)[0];
@@ -206,7 +206,7 @@ pub const Operation = union(enum) {
         offset: math.Vec2 = .{ 0, 0 },
 
         pub fn init(sel: ImageSelection) ?Move {
-            if (sel.isNothingSelected()) return null;
+            if (sel.getTotalCount() == 0) return null;
             return .{};
         }
 
@@ -230,7 +230,7 @@ pub const Operation = union(enum) {
         remove_single_nodes: bool = true,
 
         pub fn init(sel: ImageSelection) ?Remove {
-            if (sel.isNothingSelected()) return null;
+            if (sel.getTotalCount() == 0) return null;
             return .{};
         }
 
@@ -311,7 +311,7 @@ pub const Operation = union(enum) {
         _pos_b: math.Vec2,
 
         pub fn init(sel: ImageSelection) ?ChangeAngle {
-            if (!(sel.loops.items.len == 0 and sel.intervals.len == 1)) return null;
+            if (!(sel.getLoopCount() == 0 and sel.getIntervalCount() == 1)) return null;
             const path = sel.image.get(sel.intervals.items(.index)[0]);
             const interval = sel.intervals.items(.interval)[0];
             if (!interval.isSingleSegment(path)) return null;

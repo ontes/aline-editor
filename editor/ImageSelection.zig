@@ -64,8 +64,14 @@ pub fn cloneWithNothingSelected(sel: ImageSelection) !ImageSelection {
     return .{ .image = try sel.image.clone() };
 }
 
-pub fn isNothingSelected(sel: ImageSelection) bool {
-    return sel.loops.items.len == 0 and sel.intervals.len == 0;
+pub fn getLoopCount(sel: ImageSelection) usize {
+    return sel.loops.items.len;
+}
+pub fn getIntervalCount(sel: ImageSelection) usize {
+    return sel.intervals.len;
+}
+pub fn getTotalCount(sel: ImageSelection) usize {
+    return sel.getLoopCount() + sel.getIntervalCount();
 }
 
 pub fn isNodeSelected(sel: ImageSelection, index: usize, node: usize) bool {
@@ -137,7 +143,7 @@ pub fn selectSegment(sel: *ImageSelection, index: usize, segment: usize) !void {
     const segment_end = sel.image.get(index).nextNode(segment);
     var a = segment;
     var b = segment_end;
-    var i = sel.intervals.len;
+    var i = sel.getIntervalCount();
     while (i > 0) : (i -= 1) {
         if (sel.intervals.items(.index)[i - 1] == index) {
             const sel_interval = sel.intervals.items(.interval)[i - 1];
@@ -227,7 +233,7 @@ pub fn deselectPath(sel: *ImageSelection, index: usize) !bool {
             return true;
         }
     }
-    var i = sel.intervals.len;
+    var i = sel.getIntervalCount();
     while (i > 0) : (i -= 1) {
         if (sel.intervals.items(.index)[i - 1] == index) {
             const interval = sel.intervals.items(.interval)[i - 1];
