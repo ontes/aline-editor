@@ -189,7 +189,7 @@ pub const Operation = union(enum) {
             const ps0 = is.getComp(0);
             const ps1 = is.getComp(1);
             if (ps0.path.index == ps1.path.index)
-                return .{ .image = try is.image.operationLoopPath(ps0.path.index, op.angle) };
+                return .{ .image = try is.image.operationLoopPath(ps0.path.index, if (ps0.a == 0) -op.angle else op.angle) };
             return .{ .image = try is.image.operationConnectPaths(ps0.path.index, ps0.a == 0, ps1.path.index, ps1.a != 0, op.angle) };
         }
 
@@ -300,7 +300,7 @@ pub const Operation = union(enum) {
 
         pub fn apply(op: ChangeAngle, is: ImageSelection) !ImageSelection {
             var out = try is.clone();
-            const ps = is.getComp(0);
+            const ps = out.getComp(0);
             ps.path.getAngles()[ps.a] = op.angle;
             return out;
         }
