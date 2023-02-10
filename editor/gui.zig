@@ -95,12 +95,28 @@ pub fn onFrame() !void {
             .ChangeStyle => |*op| {
                 imgui.text("Change Style");
 
+                imgui.beginDisabled(!op.enable_fill_color);
                 if (imgui.colorEdit4("fill color", &op.style.fill_color, .{}))
                     try editor.updateOperation();
+                if (imgui.isItemHovered(.{ .allow_when_disabled = true }) and imgui.isMouseClicked(.left, false))
+                    op.enable_fill_color = true;
+                imgui.endDisabled();
+
+                imgui.beginDisabled(!op.enable_stroke_color);
                 if (imgui.colorEdit4("stroke color", &op.style.stroke_color, .{}))
                     try editor.updateOperation();
+                if (imgui.isItemHovered(.{ .allow_when_disabled = true }) and imgui.isMouseClicked(.left, false))
+                    op.enable_stroke_color = true;
+                imgui.endDisabled();
+
+                imgui.beginDisabled(!op.enable_stroke_width);
                 if (imgui.inputFloat("stroke width", &op.style.stroke.width, 0, 0, null, .{}))
                     try editor.updateOperation();
+                if (imgui.isItemHovered(.{ .allow_when_disabled = true }) and imgui.isMouseClicked(.left, false))
+                    op.enable_stroke_width = true;
+                imgui.endDisabled();
+
+                imgui.beginDisabled(!op.enable_stroke_cap);
                 if (imgui.beginCombo("stroke cap", @tagName(op.style.stroke.cap), .{})) {
                     inline for (@typeInfo(math.Stroke.CapStyle).Enum.fields) |field| {
                         const tag = @field(math.Stroke.CapStyle, field.name);
@@ -111,6 +127,9 @@ pub fn onFrame() !void {
                     }
                     imgui.endCombo();
                 }
+                if (imgui.isItemHovered(.{ .allow_when_disabled = true }) and imgui.isMouseClicked(.left, false))
+                    op.enable_stroke_cap = true;
+                imgui.endDisabled();
             },
             .AddPoint => |*op| {
                 imgui.text("Add Point");

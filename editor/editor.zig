@@ -73,18 +73,37 @@ pub const Operation = union(enum) {
 
     pub const ChangeStyle = struct {
         style: Image.Path.Style,
+        enable_fill_color: bool,
+        enable_stroke_color: bool,
+        enable_stroke_width: bool,
+        enable_stroke_cap: bool,
 
         pub fn init(is: ImageSelection) ?ChangeStyle {
-            if (is.len() != 1) return null;
-            const ps = is.get(0);
-            if (!ps.isWholePath()) return null;
-            return .{ .style = ps.path.getStyle() };
+            if (is.len() == 0) return null;
+            var i: usize = 0;
+            while (i < is.len()) : (i += 1) {
+                if (!is.get(i).isWholePath()) return null;
+            }
+            const enable = is.len() == 1;
+            return .{
+                .style = is.get(0).path.getStyle(),
+                .enable_fill_color = enable,
+                .enable_stroke_color = enable,
+                .enable_stroke_width = enable,
+                .enable_stroke_cap = enable,
+            };
         }
 
         pub fn apply(op: ChangeStyle, is: ImageSelection) !ImageSelection {
-            const ps = is.get(0);
             var out = try is.clone();
-            out.image.props.items(.style)[ps.path.index] = op.style;
+            var i: usize = 0;
+            while (i < is.len()) : (i += 1) {
+                const style = &out.image.props.items(.style)[is.get(i).path.index];
+                if (op.enable_fill_color) style.fill_color = op.style.fill_color;
+                if (op.enable_stroke_color) style.stroke_color = op.style.stroke_color;
+                if (op.enable_stroke_width) style.stroke.width = op.style.stroke.width;
+                if (op.enable_stroke_cap) style.stroke.cap = op.style.stroke.cap;
+            }
             return out;
         }
     };
