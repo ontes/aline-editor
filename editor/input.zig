@@ -136,6 +136,16 @@ fn beginOperation(key: platform.Key) !void {
         .delete => if (editor.Operation.Remove.init(editor.history.get().*)) |op| {
             try editor.setOperation(.{ .Remove = op });
         },
+        .up => if (editor.Operation.Order.init(editor.history.get().*)) |op_| {
+            var op = op_;
+            op.offset = if (shift_pressed) editor.Operation.Order.getLimit(editor.history.get().*) else 1;
+            try editor.setOperation(.{ .Order = op });
+        },
+        .down => if (editor.Operation.Order.init(editor.history.get().*)) |op_| {
+            var op = op_;
+            op.offset = if (shift_pressed) -editor.Operation.Order.getLimit(editor.history.get().*) else -1;
+            try editor.setOperation(.{ .Order = op });
+        },
         .z => if (ctrl_pressed and editor.history.undo()) {
             editor.should_draw_image = true;
             editor.should_draw_helper = true;

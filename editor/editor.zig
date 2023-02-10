@@ -39,6 +39,7 @@ pub const Operation = union(enum) {
     Move: Move,
     Remove: Remove,
     ChangeAngle: ChangeAngle,
+    Order: Order,
 
     pub fn apply(op: Operation, is: ImageSelection) !ImageSelection {
         return switch (op) {
@@ -286,6 +287,46 @@ pub const Operation = union(enum) {
             var arc = ps.path.getArc(ps.a);
             arc.angle = op.angle;
             try arc.generate(getStroke().generator(gen));
+        }
+    };
+
+    pub const Order = struct {
+        offset: isize = 0,
+
+        pub fn init(is: ImageSelection) ?Order {
+            if (is.image.len() < 2 or is.len() == 0) return null;
+            var i: usize = 0;
+            while (i < is.len()) : (i += 1) {
+                if (!is.get(i).isWholePath()) return null;
+            }
+            return .{};
+        }
+
+        pub fn getLimit(is: ImageSelection) isize {
+            return @intCast(isize, is.image.len() - 1);
+        }
+
+        pub fn apply(op: Order, is: ImageSelection) !ImageSelection {
+            var out = ImageSelection{ .image = try Image.initCapacity(is.image.allocator, is.image.props.len, is.image.nodes.len) };
+            var i: usize = 0;
+            while (i < is.image.len() + std.math.absCast(op.offset)) : (i += 1) {
+                if (i < is.image.len()) {
+                    const selected = is.isPathSelected(i);
+                    if (selected != (op.offset > 0)) {
+                        out.image.addImageSlice(is.image, i, i + 1) catch unreachable;
+                        if (selected) try out.selectPath(out.image.len() - 1);
+                    }
+                }
+                if (i >= std.math.absCast(op.offset)) {
+                    const j = i - std.math.absCast(op.offset);
+                    const selected = is.isPathSelected(j);
+                    if (selected == (op.offset > 0)) {
+                        out.image.addImageSlice(is.image, j, j + 1) catch unreachable;
+                        if (selected) try out.selectPath(out.image.len() - 1);
+                    }
+                }
+            }
+            return out;
         }
     };
 };

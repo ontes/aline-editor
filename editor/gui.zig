@@ -163,9 +163,19 @@ pub fn onFrame() !void {
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op._pos_b) };
             },
+            .Order => |*op| {
+                imgui.text("Order");
+
+                var offset = @intCast(c_int, op.offset);
+                if (imgui.inputInt("##offset", &offset, 1, 100, .{})) {
+                    const limit = editor.Operation.Order.getLimit(editor.history.get().*);
+                    op.offset = @max(@min(offset, limit), -limit);
+                    try editor.updateOperation();
+                }
+            },
         };
-        if (!open) editor.operation = null;
         imgui.end();
+        if (!open) editor.operation = null;
     }
 
     if (imgui.beginPopupContextVoid("context menu", .{ .mouse_button_right = true })) {
@@ -202,6 +212,31 @@ pub fn onFrame() !void {
             if (imgui.menuItem("Change Angle", "D", false, true)) {
                 try editor.setOperation(.{ .ChangeAngle = op });
                 editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
+            }
+        }
+        if (editor.Operation.Order.init(editor.history.get().*)) |op_| {
+            var op = op_;
+            if (imgui.beginMenu("Order", true)) {
+                if (imgui.menuItem("Bring to front", "SHIFT+UP", false, true)) {
+                    op.offset = editor.Operation.Order.getLimit(editor.history.get().*);
+                    try editor.setOperation(.{ .Order = op });
+                }
+                if (imgui.menuItem("Bring forward", "UP", false, true)) {
+                    op.offset = 1;
+                    try editor.setOperation(.{ .Order = op });
+                }
+                if (imgui.menuItem("Send backward", "DOWN", false, true)) {
+                    op.offset = -1;
+                    try editor.setOperation(.{ .Order = op });
+                }
+                if (imgui.menuItem("Send to back", "SHIFT+DOWN", false, true)) {
+                    op.offset = -editor.Operation.Order.getLimit(editor.history.get().*);
+                    try editor.setOperation(.{ .Order = op });
+                }
+                imgui.endMenu();
+            }
+            if (imgui.isItemClicked(.left)) {
+                try editor.setOperation(.{ .Order = op });
             }
         }
         if (editor.Operation.Remove.init(editor.history.get().*)) |op| {
