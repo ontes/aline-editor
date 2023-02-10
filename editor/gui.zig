@@ -50,24 +50,24 @@ pub fn onFrame() !void {
                 editor.should_draw_helper = true;
             }
             if ((imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))) {
-                try editor.setOperation(.{ .Rename = editor.Operation.Rename.init(editor.history.get().*).? });
+                try editor.setOperation(.{ .Rename = editor.Operation.Rename.init(editor.getIS()).? });
             }
             imgui.popID();
         }
         imgui.endListBox();
         if (imgui.beginPopupContextItem("context menu", .{ .mouse_button_right = true })) {
             try editor.finishOperation();
-            if (editor.Operation.Rename.init(editor.history.get().*)) |op| {
+            if (editor.Operation.Rename.init(editor.getIS())) |op| {
                 if (imgui.menuItem("Rename", "F2", false, true)) {
                     try editor.setOperation(.{ .Rename = op });
                 }
             }
-            if (editor.Operation.ChangeStyle.init(editor.history.get().*)) |op| {
+            if (editor.Operation.ChangeStyle.init(editor.getIS())) |op| {
                 if (imgui.menuItem("Change Style", "TAB", false, true)) {
                     try editor.setOperation(.{ .ChangeStyle = op });
                 }
             }
-            if (editor.Operation.Remove.init(editor.history.get().*)) |op| {
+            if (editor.Operation.Remove.init(editor.getIS())) |op| {
                 if (imgui.menuItem("Remove", "DEL", false, true)) {
                     try editor.setOperation(.{ .Remove = op });
                 }
@@ -188,7 +188,7 @@ pub fn onFrame() !void {
 
                 var offset = @intCast(c_int, op.offset);
                 if (imgui.inputInt("##offset", &offset, 1, 100, .{})) {
-                    const limit = editor.Operation.Order.getLimit(editor.history.get().*);
+                    const limit = editor.Operation.Order.getLimit(editor.getIS());
                     op.offset = @max(@min(offset, limit), -limit);
                     try editor.updateOperation();
                 }
@@ -200,45 +200,45 @@ pub fn onFrame() !void {
 
     if (imgui.beginPopupContextVoid("context menu", .{ .mouse_button_right = true })) {
         try editor.finishOperation();
-        if (editor.Operation.ChangeStyle.init(editor.history.get().*)) |op| {
+        if (editor.Operation.ChangeStyle.init(editor.getIS())) |op| {
             if (imgui.menuItem("Change Style", "TAB", false, true)) {
                 try editor.setOperation(.{ .ChangeStyle = op });
             }
         }
-        if (editor.Operation.AddPoint.init(editor.history.get().*)) |op| {
+        if (editor.Operation.AddPoint.init(editor.getIS())) |op| {
             if (imgui.menuItem("Add Point", "A", false, true)) {
                 try editor.setOperation(.{ .AddPoint = op });
                 editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.AddPoint.position) };
             }
         }
-        if (editor.Operation.Append.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Append.init(editor.getIS())) |op| {
             if (imgui.menuItem("Append", "A", false, true)) {
                 try editor.setOperation(.{ .Append = op });
                 editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.Append.position) };
             }
         }
-        if (editor.Operation.Connect.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Connect.init(editor.getIS())) |op| {
             if (imgui.menuItem("Connect", "C", false, true)) {
                 try editor.setOperation(.{ .Connect = op });
             }
         }
-        if (editor.Operation.Move.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Move.init(editor.getIS())) |op| {
             if (imgui.menuItem("Move", "G", false, true)) {
                 try editor.setOperation(.{ .Move = op });
                 editor.capture = .{ .Offset = editor.Capture.Offset.init(&editor.operation.?.Move.offset) };
             }
         }
-        if (editor.Operation.ChangeAngle.init(editor.history.get().*)) |op| {
+        if (editor.Operation.ChangeAngle.init(editor.getIS())) |op| {
             if (imgui.menuItem("Change Angle", "D", false, true)) {
                 try editor.setOperation(.{ .ChangeAngle = op });
                 editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
             }
         }
-        if (editor.Operation.Order.init(editor.history.get().*)) |op_| {
+        if (editor.Operation.Order.init(editor.getIS())) |op_| {
             var op = op_;
             if (imgui.beginMenu("Order", true)) {
                 if (imgui.menuItem("Bring to front", "SHIFT+UP", false, true)) {
-                    op.offset = editor.Operation.Order.getLimit(editor.history.get().*);
+                    op.offset = editor.Operation.Order.getLimit(editor.getIS());
                     try editor.setOperation(.{ .Order = op });
                 }
                 if (imgui.menuItem("Bring forward", "UP", false, true)) {
@@ -250,7 +250,7 @@ pub fn onFrame() !void {
                     try editor.setOperation(.{ .Order = op });
                 }
                 if (imgui.menuItem("Send to back", "SHIFT+DOWN", false, true)) {
-                    op.offset = -editor.Operation.Order.getLimit(editor.history.get().*);
+                    op.offset = -editor.Operation.Order.getLimit(editor.getIS());
                     try editor.setOperation(.{ .Order = op });
                 }
                 imgui.endMenu();
@@ -259,12 +259,38 @@ pub fn onFrame() !void {
                 try editor.setOperation(.{ .Order = op });
             }
         }
-        if (editor.Operation.Remove.init(editor.history.get().*)) |op| {
+        if (editor.Operation.Remove.init(editor.getIS())) |op| {
             if (imgui.menuItem("Remove", "DEL", false, true)) {
                 try editor.setOperation(.{ .Remove = op });
             }
         }
         imgui.endPopup();
+    }
+
+    if (imgui.beginMainMenuBar()) {
+        if (imgui.beginMenu("File", true)) {
+            imgui.endMenu();
+        }
+        if (imgui.beginMenu("Edit", true)) {
+            if (imgui.menuItem("Undo", "CTRL+Z", false, editor.history.canUndo())) {
+                editor.undo();
+            }
+            if (imgui.menuItem("Redo", "CTRL+Y", false, editor.history.canRedo())) {
+                editor.redo();
+            }
+            imgui.separator();
+            if (imgui.menuItem("Select All", "CTRL+A", false, true)) {
+                try editor.selectAll();
+            }
+            if (imgui.menuItem("Deselect All", null, false, true)) {
+                editor.history.get().deselectAll();
+                editor.should_draw_helper = true;
+            }
+
+            imgui.endMenu();
+        }
+
+        imgui.endMainMenuBar();
     }
 
     imgui.render();

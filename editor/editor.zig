@@ -415,8 +415,8 @@ pub fn deinit() void {
 
 fn applyOperation() !void {
     if (operation) |op| {
-        if (!history.undo()) unreachable;
-        try history.add(try op.apply(history.get().*));
+        history.undo();
+        try history.add(try op.apply(getIS()));
         should_draw_helper = true;
         should_draw_image = true;
     }
@@ -442,6 +442,27 @@ pub fn setOperation(new_operation: Operation) !void {
     operation_is_new = true;
     try history.add(try history.get().clone());
     try updateOperation();
+}
+
+pub fn getIS() ImageSelection {
+    return history.get().*;
+}
+
+pub fn undo() void {
+    history.undo();
+    should_draw_image = true;
+    should_draw_helper = true;
+}
+
+pub fn redo() void {
+    history.redo();
+    should_draw_image = true;
+    should_draw_helper = true;
+}
+
+pub fn selectAll() !void {
+    try history.get().selectAll();
+    should_draw_helper = true;
 }
 
 const select_color = [4]f32{ 0.9, 0.9, 0, 1 };

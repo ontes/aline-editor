@@ -106,53 +106,50 @@ pub fn onEvent(event: platform.Event) !void {
 fn beginOperation(key: platform.Key) !void {
     try editor.finishOperation();
     switch (key) {
-        .tab => if (editor.Operation.ChangeStyle.init(editor.history.get().*)) |op| {
+        .tab => if (editor.Operation.ChangeStyle.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .ChangeStyle = op });
         },
-        .f2 => if (editor.Operation.Rename.init(editor.history.get().*)) |op| {
+        .f2 => if (editor.Operation.Rename.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Rename = op });
         },
         .a => if (ctrl_pressed) {
-            try editor.history.get().selectAll();
-            editor.should_draw_helper = true;
-        } else if (editor.Operation.AddPoint.init(editor.history.get().*)) |op| {
+            try editor.selectAll();
+        } else if (editor.Operation.AddPoint.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .AddPoint = op });
             editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.AddPoint.position) };
-        } else if (editor.Operation.Append.init(editor.history.get().*)) |op| {
+        } else if (editor.Operation.Append.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Append = op });
             editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.Append.position) };
         },
-        .c => if (editor.Operation.Connect.init(editor.history.get().*)) |op| {
+        .c => if (editor.Operation.Connect.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Connect = op });
         },
-        .g => if (editor.Operation.Move.init(editor.history.get().*)) |op| {
+        .g => if (editor.Operation.Move.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Move = op });
             editor.capture = .{ .Offset = editor.Capture.Offset.init(&editor.operation.?.Move.offset) };
         },
-        .d => if (editor.Operation.ChangeAngle.init(editor.history.get().*)) |op| {
+        .d => if (editor.Operation.ChangeAngle.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .ChangeAngle = op });
             editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
         },
-        .delete => if (editor.Operation.Remove.init(editor.history.get().*)) |op| {
+        .delete => if (editor.Operation.Remove.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Remove = op });
         },
-        .up => if (editor.Operation.Order.init(editor.history.get().*)) |op_| {
+        .up => if (editor.Operation.Order.init(editor.getIS())) |op_| {
             var op = op_;
-            op.offset = if (shift_pressed) editor.Operation.Order.getLimit(editor.history.get().*) else 1;
+            op.offset = if (shift_pressed) editor.Operation.Order.getLimit(editor.getIS()) else 1;
             try editor.setOperation(.{ .Order = op });
         },
-        .down => if (editor.Operation.Order.init(editor.history.get().*)) |op_| {
+        .down => if (editor.Operation.Order.init(editor.getIS())) |op_| {
             var op = op_;
-            op.offset = if (shift_pressed) -editor.Operation.Order.getLimit(editor.history.get().*) else -1;
+            op.offset = if (shift_pressed) -editor.Operation.Order.getLimit(editor.getIS()) else -1;
             try editor.setOperation(.{ .Order = op });
         },
-        .z => if (ctrl_pressed and editor.history.undo()) {
-            editor.should_draw_image = true;
-            editor.should_draw_helper = true;
+        .z => if (ctrl_pressed and editor.history.canUndo()) {
+            editor.undo();
         },
-        .y => if (ctrl_pressed and editor.history.redo()) {
-            editor.should_draw_image = true;
-            editor.should_draw_helper = true;
+        .y => if (ctrl_pressed and editor.history.canRedo()) {
+            editor.redo();
         },
         else => {},
     }

@@ -35,18 +35,18 @@ pub fn add(history: *History, is: ImageSelection) !void {
         history.entries.orderedRemove(0).deinit();
 }
 
-pub fn undo(history: *History) bool {
-    if (history.level + 1 < history.entries.items.len) {
-        history.level += 1;
-        return true;
-    }
-    return false;
+pub fn canUndo(history: History) bool {
+    return history.level + 1 < history.entries.items.len;
+}
+pub fn undo(history: *History) void {
+    std.debug.assert(history.canUndo());
+    history.level += 1;
 }
 
-pub fn redo(history: *History) bool {
-    if (history.level > 0) {
-        history.level -= 1;
-        return true;
-    }
-    return false;
+pub fn canRedo(history: History) bool {
+    return history.level > 0;
+}
+pub fn redo(history: *History) void {
+    std.debug.assert(history.canRedo());
+    history.level -= 1;
 }
