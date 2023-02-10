@@ -10,7 +10,7 @@ const snapping = @import("snapping.zig");
 pub var history: History = undefined;
 pub var operation: ?Operation = null;
 pub var capture: ?Capture = null;
-pub var operation_in_new = false;
+pub var operation_is_new = false;
 
 const live_preview = true;
 pub var should_draw_canvas = true;
@@ -439,7 +439,7 @@ pub fn finishOperation() !void {
 pub fn setOperation(new_operation: Operation) !void {
     try finishOperation();
     operation = new_operation;
-    operation_in_new = true;
+    operation_is_new = true;
     try history.add(try history.get().clone());
     try updateOperation();
 }

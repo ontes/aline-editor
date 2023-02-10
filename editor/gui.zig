@@ -85,9 +85,9 @@ pub fn onFrame() !void {
             .Rename => |*op| {
                 imgui.text("Rename");
 
-                if (editor.operation_in_new) {
+                if (editor.operation_is_new) {
                     imgui.setKeyboardFocusHere(0);
-                    editor.operation_in_new = false;
+                    editor.operation_is_new = false;
                 }
                 const name_max_len = @typeInfo(@import("Image.zig").Path.Name).Array.len;
                 if (imgui.inputText("##name", &op.name, name_max_len - 1, .{}, null, null))
