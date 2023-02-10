@@ -148,16 +148,22 @@ pub fn onFrame() !void {
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Position = editor.Capture.Position.init(&op.position) };
 
-                if (imgui.inputFloat("angle", &op.angle, 0, 0, null, .{}))
+                var angle_deg = std.math.radiansToDegrees(f32, op.angle);
+                if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
+                    op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
+                }
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op.position) };
             },
             .Connect => |*op| {
                 imgui.text("Connect");
 
-                if (imgui.inputFloat("angle", &op.angle, 0, 0, null, .{}))
+                var angle_deg = std.math.radiansToDegrees(f32, op.angle);
+                if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
+                    op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
+                }
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op._pos_b) };
             },
@@ -178,8 +184,11 @@ pub fn onFrame() !void {
             .ChangeAngle => |*op| {
                 imgui.text("Change Angle");
 
-                if (imgui.inputFloat("angle", &op.angle, 0, 0, null, .{}))
+                var angle_deg = std.math.radiansToDegrees(f32, op.angle);
+                if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
+                    op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
+                }
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op._pos_b) };
             },
