@@ -158,7 +158,7 @@ pub const Context = struct {
                 .view = context.swapchain.getCurrentTextureView(),
                 .load_op = .clear,
                 .store_op = .store,
-                .clear_value = .{ .r = 0.9, .g = 0.9, .b = 0.9, .a = 1 },
+                .clear_value = .{ .r = 0.8, .g = 0.8, .b = 0.8, .a = 1 },
             }},
         });
         draw_fn(pass);

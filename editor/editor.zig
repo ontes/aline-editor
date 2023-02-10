@@ -22,7 +22,7 @@ pub var window_size: math.Vec2 = .{ 0, 0 };
 pub var canvas_pan: math.Vec2 = .{ 0, 0 };
 pub var canvas_zoom: f32 = 1;
 const canvas_size = math.Vec2{ 512, 512 };
-const canvas_corner_radius: f32 = 16;
+const canvas_color = [4]f32{ 1, 1, 1, 1 };
 
 const default_style = Image.Path.Style{
     .stroke = .{ .width = 2, .cap = .round },
@@ -460,12 +460,8 @@ pub fn drawHelper(buffer: *render.Buffer) !void {
 }
 
 pub fn drawCanvas(buffer: *render.Buffer) !void {
-    const rect = math.RoundedRect{
-        .pos = .{ 0, 0 },
-        .radius = canvas_size / math.vec2.splat(2),
-        .corner_radius = canvas_corner_radius,
-    };
-    try rect.generate(buffer.generator(.{ 255, 255, 255, 255 }));
+    const rect = math.Rect{ .pos = .{ 0, 0 }, .radius = canvas_size / math.vec2.splat(2) };
+    try rect.generate(buffer.generator(.{ canvas_color[0], canvas_color[1], canvas_color[2], 1 }));
 }
 
 pub fn getTransform() math.Mat3 {
