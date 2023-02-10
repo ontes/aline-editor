@@ -8,14 +8,25 @@ allocator: std.mem.Allocator,
 props: std.MultiArrayList(Path.Properties) = .{},
 nodes: std.MultiArrayList(Path.Node) = .{},
 
-pub inline fn init(allocator: std.mem.Allocator) Image {
+pub fn init(allocator: std.mem.Allocator) Image {
     return .{ .allocator = allocator };
 }
 
+pub fn initCapacity(allocator: std.mem.Allocator, props_len: usize, nodes_len: usize) !Image {
+    var image = init(allocator);
+    try image.props.ensureTotalCapacity(allocator, props_len);
+    try image.nodes.ensureTotalCapacity(allocator, nodes_len);
+    return image;
+}
+
 pub fn deinit(image: Image) void {
-    var drawing_ = image;
-    drawing_.props.deinit(image.allocator);
-    drawing_.nodes.deinit(image.allocator);
+    var image_ = image;
+    image_.props.deinit(image.allocator);
+    image_.nodes.deinit(image.allocator);
+}
+
+pub fn clone(image: Image) !Image {
+    return .{ .allocator = image.allocator, .props = try image.props.clone(image.allocator), .nodes = try image.nodes.clone(image.allocator) };
 }
 
 fn getDataOffset(image: Image, index: usize) usize {
@@ -44,12 +55,12 @@ pub const Path = struct {
 
     pub const Properties = struct {
         node_count: usize,
-        style: Path.Style,
-        name: Path.Name,
+        style: Style,
+        name: Name,
     };
 
     pub const Node = struct {
-        pos: math.Vec2,
+        position: math.Vec2,
         angle: f32 = std.math.nan_f32,
     };
 
@@ -80,7 +91,7 @@ pub const Path = struct {
 
     pub fn getPositions(p: Path) []math.Vec2 {
         const offset = p.getDataOffset();
-        return p.image.nodes.items(.pos)[offset .. offset + p.getNodeCount()];
+        return p.image.nodes.items(.position)[offset .. offset + p.getNodeCount()];
     }
     pub fn getAngles(p: Path) []f32 {
         const offset = p.getDataOffset();
@@ -126,20 +137,6 @@ pub const Path = struct {
         try p.generate(style.stroke.generator(buffer.generator(style.stroke_color)));
     }
 
-    // In-situ reverse path data (shoud not change the path visually)
-    pub fn reverse(p: Path) void {
-        std.debug.assert(p.offset != null);
-        const positions = p.getPositions();
-        const angles = p.getAngles();
-        var i: usize = 0;
-        while (i < p.getNodeCount() / 2) : (i += 1) {
-            std.mem.swap(math.Vec2, &positions[i], &positions[p.getNodeCount() - i - 1]);
-            std.mem.swap(f32, &angles[i], &angles[p.getNodeCount() - i - 2]);
-        }
-        for (angles) |*angle|
-            angle.* = -angle.*;
-    }
-
     // TODO: rework this into a generator
     pub fn containsPoint(p: Path, point_pos: math.Vec2) bool {
         std.debug.assert(p.offset != null);
@@ -166,48 +163,108 @@ pub fn getComp(image: *const Image, index: usize) Path {
     return .{ .image = image, .index = index, .offset = image.getDataOffset(index) };
 }
 
-pub fn addPoint(image: *Image, pos: math.Vec2, style: Path.Style, name: Path.Name) !void {
-    try image.nodes.append(image.allocator, .{ .pos = pos });
-    try image.props.append(image.allocator, .{ .node_count = 1, .style = style, .name = name });
+pub fn addImageSlice(image: *Image, src_image: Image, from: usize, to: usize) !void {
+    const props_offset = image.props.len;
+    try image.props.resize(image.allocator, props_offset + to - from);
+    std.mem.copy(usize, image.props.items(.node_count)[props_offset..], src_image.props.items(.node_count)[from..to]);
+    std.mem.copy(Path.Style, image.props.items(.style)[props_offset..], src_image.props.items(.style)[from..to]);
+    std.mem.copy(Path.Name, image.props.items(.name)[props_offset..], src_image.props.items(.name)[from..to]);
+
+    const nodes_offset = image.nodes.len;
+    const nodes_from = src_image.getDataOffset(from);
+    const nodes_to = src_image.getDataOffset(to);
+    try image.nodes.resize(image.allocator, nodes_offset + nodes_to - nodes_from);
+    std.mem.copy(math.Vec2, image.nodes.items(.position)[nodes_offset..], src_image.nodes.items(.position)[nodes_from..nodes_to]);
+    std.mem.copy(f32, image.nodes.items(.angle)[nodes_offset..], src_image.nodes.items(.angle)[nodes_from..nodes_to]);
 }
 
-pub fn appendPoint(image: *Image, index: usize, pos: math.Vec2, angle: f32) !void {
-    const offset = image.getDataOffset(index);
-    image.nodes.items(.angle)[offset + image.get(index).getNodeCount() - 1] = angle;
-    try image.nodes.insert(image.allocator, offset + image.get(index).getNodeCount(), .{ .pos = pos });
-    image.props.items(.node_count)[index] += 1;
+pub fn addImage(image: *Image, src_image: Image) !void {
+    return image.addImageSlice(src_image, 0, src_image.len());
 }
 
-/// Add segment from last to first node
-pub fn loopPath(image: *Image, index: usize, angle: f32) void {
-    image.nodes.items(.angle)[image.getDataOffset(index) + image.get(index).getNodeCount() - 1] = angle;
+pub fn addEmptyPath(image: *Image, style: Path.Style, name: Path.Name) !void {
+    return image.props.append(image.allocator, .{ .node_count = 0, .style = style, .name = name });
 }
 
-pub fn joinPaths(image: *Image, index_a: usize, index_b: usize, angle: f32) usize {
-    if (index_a == index_b) {
-        image.loopPath(index_a, angle);
-        return index_a;
+pub fn appendNodes(image: *Image, positions: []const math.Vec2, angles: []const f32, reversed: bool) !void {
+    std.debug.assert(positions.len == angles.len);
+    const offset = image.nodes.len;
+    try image.nodes.resize(image.allocator, offset + positions.len);
+    if (!reversed) {
+        std.mem.copy(math.Vec2, image.nodes.items(.position)[offset..], positions);
+        std.mem.copy(f32, image.nodes.items(.angle)[offset..], angles);
+    } else {
+        for (positions) |pos, i|
+            image.nodes.items(.position)[image.nodes.len - i - 1] = pos;
+        for (angles[0 .. angles.len - 1]) |ang, i|
+            image.nodes.items(.angle)[image.nodes.len - i - 2] = -ang;
+        image.nodes.items(.angle)[image.nodes.len - 1] = -angles[angles.len - 1];
     }
-    const new_index = if (index_a < index_b) index_a else index_a - 1;
-    // image.reorder(index_b, new_index + 1);
-    // image.nodes.items[image.getDataOffset(new_index) + image.get(new_index).getNodeCount() - 1].angle = angle;
-    // image.props.items(.node_count)[new_index] += image.props.items(.node_count)[new_index + 1];
-    // image.props.orderedRemove(new_index + 1);
-    return new_index;
+    image.props.items(.node_count)[image.len() - 1] += positions.len;
 }
 
-pub fn clear(image: *Image) void {
-    image.nodes.shrinkRetainingCapacity(0);
-    image.props.shrinkRetainingCapacity(0);
+pub fn appendNode(image: *Image, node: Path.Node) !void {
+    return image.appendNodes(&.{node.position}, &.{node.angle}, false);
 }
 
-pub fn clone(image: Image) !Image {
-    var _drawing = image;
-    return .{
-        .allocator = image.allocator,
-        .props = try _drawing.props.clone(image.allocator),
-        .nodes = try _drawing.nodes.clone(image.allocator),
-    };
+pub fn setLastAngle(image: Image, angle: f32) void {
+    image.nodes.items(.angle)[image.nodes.len - 1] = angle;
+}
+
+/// Add new path containing a single point
+pub fn operationAddPoint(image: Image, pos: math.Vec2, style: Path.Style, name: Path.Name) !Image {
+    var out = try Image.initCapacity(image.allocator, image.props.len + 1, image.nodes.len + 1);
+    out.addImage(image) catch unreachable;
+    out.addEmptyPath(style, name) catch unreachable;
+    out.appendNode(.{ .position = pos }) catch unreachable;
+    return out;
+}
+
+/// Append point to the last path
+pub fn operationAppendPoint(image: Image, index: usize, reverse: bool, angle: f32, pos: math.Vec2) !Image {
+    const path = image.getComp(index);
+    var out = try Image.initCapacity(image.allocator, image.props.len, image.nodes.len + 1);
+    out.addImageSlice(image, 0, index) catch unreachable;
+    out.addEmptyPath(path.getStyle(), path.getName()) catch unreachable;
+    out.appendNodes(path.getPositions(), path.getAngles(), reverse) catch unreachable;
+    out.setLastAngle(angle);
+    out.appendNode(.{ .position = pos }) catch unreachable;
+    out.addImageSlice(image, index + 1, image.len()) catch unreachable;
+    return out;
+}
+
+/// Add segment from last to first node of the last path
+pub fn operationLoopPath(image: Image, index: usize, angle: f32) !Image {
+    var out = try Image.initCapacity(image.allocator, image.props.len, image.nodes.len);
+    out.addImageSlice(image, 0, index + 1) catch unreachable;
+    out.setLastAngle(angle);
+    out.addImageSlice(image, index + 1, image.len()) catch unreachable;
+    return out;
+}
+
+/// Appends path on index_b after path on index_a
+pub fn operationConnectPaths(image: Image, index_a: usize, reverse_a: bool, index_b: usize, reverse_b: bool, angle: f32) !Image {
+    std.debug.assert(index_a != index_b);
+    const path_a = image.getComp(index_a);
+    const path_b = image.getComp(index_b);
+    var out = try Image.initCapacity(image.allocator, image.props.len - 1, image.nodes.len);
+    if (index_a < index_b) {
+        out.addImageSlice(image, 0, index_a) catch unreachable;
+    } else {
+        out.addImageSlice(image, 0, index_b) catch unreachable;
+        out.addImageSlice(image, index_b + 1, index_a) catch unreachable;
+    }
+    out.addEmptyPath(path_a.getStyle(), path_b.getName()) catch unreachable;
+    out.appendNodes(path_a.getPositions(), path_b.getAngles(), reverse_a) catch unreachable;
+    out.setLastAngle(angle);
+    out.appendNodes(path_b.getPositions(), path_b.getAngles(), reverse_b) catch unreachable;
+    if (index_a < index_b) {
+        out.addImageSlice(image, index_a + 1, index_b) catch unreachable;
+        out.addImageSlice(image, index_b + 1, image.len()) catch unreachable;
+    } else {
+        out.addImageSlice(image, index_a + 1, image.len()) catch unreachable;
+    }
+    return out;
 }
 
 const Iterator = struct {

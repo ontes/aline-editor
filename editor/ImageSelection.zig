@@ -20,14 +20,7 @@ pub fn deinit(is: ImageSelection) void {
 }
 
 pub fn clone(is: ImageSelection) !ImageSelection {
-    return .{
-        .image = try is.image.clone(),
-        .props = try is.props.clone(is.image.allocator),
-    };
-}
-
-pub fn cloneWithNothingSelected(is: ImageSelection) !ImageSelection {
-    return .{ .image = try is.image.clone() };
+    return .{ .image = try is.image.clone(), .props = try is.props.clone(is.image.allocator) };
 }
 
 pub fn len(is: ImageSelection) usize {
@@ -42,8 +35,8 @@ pub const PathSelection = struct {
     };
 
     path: Image.Path,
-    a: usize,
-    b: usize,
+    a: usize = 0,
+    b: usize = std.math.maxInt(usize),
 
     pub fn isLooped(ps: PathSelection) bool {
         return ps.b == std.math.maxInt(usize);

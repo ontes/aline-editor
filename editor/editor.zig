@@ -99,9 +99,8 @@ pub const Operation = union(enum) {
         }
 
         pub fn apply(op: AddPoint, is: ImageSelection) !ImageSelection {
-            var out = try is.cloneWithNothingSelected();
-            try out.image.addPoint(op.position, op.style, op.name);
-            try out.selectNode(is.image.len(), 0);
+            var out = ImageSelection{ .image = try is.image.operationAddPoint(op.position, op.style, op.name) };
+            try out.selectNode(out.image.len() - 1, 0);
             return out;
         }
 
@@ -127,28 +126,20 @@ pub const Operation = union(enum) {
 
         pub fn apply(op: Append, is: ImageSelection) !ImageSelection {
             const ps = is.getComp(0);
-            var out = try is.cloneWithNothingSelected();
-            if (ps.a == 0)
-                ps.path.reverse();
             if (snapping.snapToLooseEnd(is.image, op.position, getSnapDist())) |res| {
-                if (res.index == ps.path.index) {
-                    if (res.node != ps.a)
-                        out.image.loopPath(ps.path.index, op.angle);
-                } else {
-                    if (res.node != 0)
-                        out.image.getComp(res.index).reverse();
-                    _ = out.image.joinPaths(ps.path.index, res.index, op.angle);
-                }
-            } else {
-                try out.image.appendPoint(ps.path.index, op.position, op.angle);
-                try out.selectNode(ps.path.index, ps.path.getNodeCount());
+                if (res.index != ps.path.index)
+                    return .{ .image = try is.image.operationConnectPaths(ps.path.index, ps.a == 0, res.index, res.node != 0, op.angle) };
+                if (res.node != ps.a)
+                    return .{ .image = try is.image.operationLoopPath(ps.path.index, op.angle) };
+                return try is.clone();
             }
+            var out = ImageSelection{ .image = try is.image.operationAppendPoint(ps.path.index, ps.a == 0, op.angle, op.position) };
+            try out.selectNode(ps.path.index, ps.path.getNodeCount());
             return out;
         }
 
         pub fn generateHelper(op: Append, is: ImageSelection, gen: anytype) !void {
             const ps = is.getComp(0);
-
             try math.Arc.generate(.{
                 .pos_a = ps.path.getPos(ps.a),
                 .pos_b = if (snapping.snapToLooseEnd(is.image, op.position, getSnapDist())) |res| is.image.get(res.index).getPos(res.node) else op.position,
@@ -163,23 +154,27 @@ pub const Operation = union(enum) {
         _pos_b: math.Vec2,
 
         pub fn init(is: ImageSelection) ?Connect {
-            if (is.len() != 0) return null;
-            const ps_a = is.getComp(0);
-            const ps_b = is.getComp(1);
-            if (!ps_a.isLooseEnd() or !ps_b.isLooseEnd()) return null;
-            return .{ ._pos_a = ps_a.path.getPos(ps_a.a), ._pos_b = ps_b.path.getPos(ps_b.a) };
+            if (is.len() != 2) return null;
+            const ps0 = is.getComp(0);
+            const ps1 = is.getComp(1);
+            if (!ps0.isLooseEnd() or !ps1.isLooseEnd()) return null;
+            return .{ ._pos_a = ps0.path.getPos(ps0.a), ._pos_b = ps1.path.getPos(ps1.a) };
         }
 
         pub fn apply(op: Connect, is: ImageSelection) !ImageSelection {
-            const ps_a = is.getComp(0);
-            const ps_b = is.getComp(1);
-            var out = try is.cloneWithNothingSelected();
-            if (ps_a.a == 0) ps_a.path.reverse();
-            if (ps_b.a != 0) ps_b.path.reverse();
-            const node = ps_a.path.getNodeCount() - 1;
-            const index = out.image.joinPaths(ps_a.path.index, ps_b.path.index, op.angle);
-            try out.selectSegment(index, node);
-            return out;
+            const ps0 = is.getComp(0);
+            const ps1 = is.getComp(1);
+            if (ps0.path.index == ps1.path.index)
+                return .{ .image = try is.image.operationLoopPath(ps0.path.index, op.angle) };
+            return .{ .image = try is.image.operationConnectPaths(ps0.path.index, ps0.a == 0, ps1.path.index, ps1.a != 0, op.angle) };
+        }
+
+        pub fn generateHelper(op: Connect, _: ImageSelection, gen: anytype) !void {
+            try math.Arc.generate(.{
+                .pos_a = op._pos_a,
+                .pos_b = op._pos_b,
+                .angle = op.angle,
+            }, getStroke().generator(gen));
         }
     };
 
@@ -219,64 +214,50 @@ pub const Operation = union(enum) {
             var out = ImageSelection.init(is.image.allocator);
             var it = is.image.iterator();
             while (it.next()) |path| {
-                if (path.isLooped()) {
-                    try op.addUnselectedLoop(&out.image, is, path.index);
-                } else {
-                    try op.addUnselectedInterval(&out.image, is, path.index, 0, path.getNodeCount() - 1);
-                }
+                try op.addUnselected(&out.image, is, if (path.isLooped()) .{ .path = path } else .{ .path = path, .b = path.getNodeCount() - 1 });
             }
             return out;
         }
 
-        fn addUnselectedLoop(op: Remove, out: *Image, is: ImageSelection, path_index: usize) !void {
-            const path = is.image.getComp(path_index);
-            var it = is.iterator(path);
-            while (it.next()) |ps| {
-                if (ps.isLooped()) continue;
-                if (!ps.isSingleNode()) {
-                    try op.addUnselectedInterval(out, is, path_index, ps.b, ps.a);
+        /// Adds parts of PathSelection `ps` to Image `out`, that aren't selected in ImageSelection `is`.
+        fn addUnselected(op: Remove, out: *Image, is: ImageSelection, ps: ImageSelection.PathSelection) !void {
+            var it = is.iterator(ps.path);
+            while (it.next()) |sel_ps| {
+                if (sel_ps.isLooped())
                     return;
-                }
-                if (ps.isSingleNode() and op.remove_single_nodes) {
-                    try op.addUnselectedInterval(out, is, path_index, path.nextNode(ps.b), path.prevNode(ps.a));
-                    return;
+                if (sel_ps.isSingleNode() and op.remove_single_nodes) {
+                    if (ps.isLooped()) {
+                        return op.addUnselected(out, is, .{ .path = ps.path, .a = ps.path.nextNode(sel_ps.b), .b = ps.path.prevNode(sel_ps.a) });
+                    }
+                    if (ps.containsNode(sel_ps.a)) {
+                        if (sel_ps.a != ps.a) try op.addUnselected(out, is, .{ .path = ps.path, .a = ps.a, .b = ps.path.prevNode(sel_ps.a) });
+                        if (sel_ps.b != ps.b) try op.addUnselected(out, is, .{ .path = ps.path, .a = ps.path.nextNode(sel_ps.b), .b = ps.b });
+                        return;
+                    }
                 }
             }
-            try out.addPoint(path.getPos(0), path.getStyle(), path.getName());
-            const new_index = out.len() - 1;
-            var i: usize = 0;
-            while (i + 1 < path.getNodeCount()) : (i += 1)
-                try out.appendPoint(new_index, path.getPos(i + 1), path.getAng(i));
-            out.loopPath(new_index, path.getAng(i));
-        }
-
-        fn addUnselectedInterval(op: Remove, out: *Image, is: ImageSelection, path_index: usize, a: usize, b: usize) !void {
-            const path = is.image.getComp(path_index);
-            var it = is.iterator(path);
-            while (it.next()) |ps| {
-                if (ps.isLooped()) continue;
-                if (!ps.isSingleNode() and ImageSelection.PathSelection.containsSegment(.{ .a = a, .b = b, .path = path }, ps.a)) {
-                    if (ps.a != a)
-                        try op.addUnselectedInterval(out, is, path_index, a, ps.a);
-                    if (ps.b != b)
-                        try op.addUnselectedInterval(out, is, path_index, ps.b, b);
-                    return;
+            it = is.iterator(ps.path); // we have to do two separate iterations, because it matters if we remove single nodes first or intervals first
+            while (it.next()) |sel_ps| {
+                if (!sel_ps.isSingleNode()) {
+                    if (ps.isLooped()) {
+                        return op.addUnselected(out, is, .{ .path = ps.path, .a = sel_ps.b, .b = sel_ps.a });
+                    }
+                    if (ps.containsSegment(sel_ps.a)) {
+                        if (sel_ps.a != ps.a) try op.addUnselected(out, is, .{ .path = ps.path, .a = ps.a, .b = sel_ps.a });
+                        if (sel_ps.b != ps.b) try op.addUnselected(out, is, .{ .path = ps.path, .a = sel_ps.b, .b = ps.b });
+                        return;
+                    }
                 }
-                if (ps.isSingleNode() and op.remove_single_nodes and ps.containsNode(ps.a)) {
-                    if (ps.a != a)
-                        try op.addUnselectedInterval(out, is, path_index, a, path.prevNode(ps.a));
-                    if (ps.b != b)
-                        try op.addUnselectedInterval(out, is, path_index, path.nextNode(ps.b), b);
-                    return;
-                }
-                if (ps.isSingleNode() and ps.containsNode(a))
-                    return;
             }
-            try out.addPoint(path.getPos(a), path.getStyle(), path.getName());
-            const new_index = out.len() - 1;
-            var i = a;
-            while (i != b) : (i = path.nextNode(i))
-                try out.appendPoint(new_index, path.getPos(path.nextNode(i)), path.getAng(i));
+            try out.addEmptyPath(ps.path.getStyle(), ps.path.getName());
+            if (ps.isLooped()) {
+                try out.appendNodes(ps.path.getPositions(), ps.path.getAngles(), false);
+            } else {
+                var i = ps.a;
+                while (i != ps.b) : (i = ps.path.nextNode(i))
+                    try out.appendNode(.{ .position = ps.path.getPos(i), .angle = ps.path.getAng(i) });
+                try out.appendNode(.{ .position = ps.path.getPos(i) });
+            }
         }
     };
 
@@ -327,7 +308,6 @@ pub const Capture = union(enum) {
         pub fn init(pos: *math.Vec2) Position {
             return .{ .pos = pos, .orig_pos = pos.* };
         }
-
         pub fn cancel(cap: Position) void {
             cap.pos.* = cap.orig_pos;
         }
@@ -340,7 +320,6 @@ pub const Capture = union(enum) {
         pub fn init(offset: *math.Vec2) Offset {
             return .{ .offset = offset, .orig_offset = offset.* };
         }
-
         pub fn cancel(cap: Offset) void {
             cap.offset.* = cap.orig_offset;
         }
@@ -355,7 +334,6 @@ pub const Capture = union(enum) {
         pub fn init(angle: *f32, pos_a: math.Vec2, pos_b: math.Vec2) Angle {
             return .{ .angle = angle, .orig_angle = angle.*, .pos_a = pos_a, .pos_b = pos_b };
         }
-
         pub fn cancel(cap: Angle) void {
             cap.angle.* = cap.orig_angle;
         }
