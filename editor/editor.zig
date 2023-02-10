@@ -54,7 +54,7 @@ pub const Operation = union(enum) {
     }
 
     pub const Rename = struct {
-        name: [16]u8,
+        name: Image.Path.Name,
 
         pub fn init(is: ImageSelection) ?Rename {
             if (is.len() != 1) return null;
@@ -111,11 +111,15 @@ pub const Operation = union(enum) {
     pub const AddPoint = struct {
         position: math.Vec2 = .{ 0, 0 },
         style: Image.Path.Style = default_style,
-        name: Image.Path.Name = .{ 'u', 'n', 'n', 'a', 'm', 'e', 'd' } ++ .{0} ** 9,
+        name: Image.Path.Name,
+
+        fn getDefaultName(index: usize) Image.Path.Name {
+            return .{ 'P', 'a', 't', 'h', ' ', '0' + @intCast(u8, (index / 10) % 10), '0' + @intCast(u8, index % 10) } ++ .{0} ** 25;
+        }
 
         pub fn init(is: ImageSelection) ?AddPoint {
             if (is.len() != 0) return null;
-            return .{};
+            return .{ .name = getDefaultName(is.image.len()) };
         }
 
         pub fn apply(op: AddPoint, is: ImageSelection) !ImageSelection {

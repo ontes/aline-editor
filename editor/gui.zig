@@ -89,7 +89,8 @@ pub fn onFrame() !void {
                     imgui.setKeyboardFocusHere(0);
                     editor.operation_in_new = false;
                 }
-                if (imgui.inputText("##name", &op.name, 15, .{}, null, null))
+                const name_max_len = @typeInfo(@import("Image.zig").Path.Name).Array.len;
+                if (imgui.inputText("##name", &op.name, name_max_len - 1, .{}, null, null))
                     try editor.updateOperation();
             },
             .ChangeStyle => |*op| {

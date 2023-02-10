@@ -51,7 +51,7 @@ pub const Path = struct {
         }
     };
 
-    pub const Name = [16]u8;
+    pub const Name = [32]u8;
 
     pub const Properties = struct {
         node_count: usize,
