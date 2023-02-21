@@ -154,7 +154,7 @@ pub fn onFrame() !void {
                     try editor.updateOperation();
                 }
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op.position) };
+                    editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&op.angle, op._pos_a, op.position) };
             },
             .Connect => |*op| {
                 imgui.text("Connect");
@@ -165,7 +165,7 @@ pub fn onFrame() !void {
                     try editor.updateOperation();
                 }
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op._pos_b) };
+                    editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&op.angle, op._pos_a, op._pos_b) };
             },
             .Move => |*op| {
                 imgui.text("Move");
@@ -175,14 +175,13 @@ pub fn onFrame() !void {
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Offset = editor.Capture.Offset.init(&op.offset) };
             },
-            .Remove => |*op| {
-                imgui.text("Remove");
+            .Rotate => |*op| {
+                imgui.text("Rotate");
 
-                if (imgui.checkbox("remove single nodes", &op.remove_single_nodes))
+                if (imgui.inputFloat2("origin", &op.origin[0], null, .{}))
                     try editor.updateOperation();
-            },
-            .ChangeAngle => |*op| {
-                imgui.text("Change Angle");
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.origin) };
 
                 var angle_deg = std.math.radiansToDegrees(f32, op.angle);
                 if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
@@ -190,7 +189,24 @@ pub fn onFrame() !void {
                     try editor.updateOperation();
                 }
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op._pos_a, op._pos_b) };
+                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op.origin) };
+            },
+            .Remove => |*op| {
+                imgui.text("Remove");
+
+                if (imgui.checkbox("remove single nodes", &op.remove_single_nodes))
+                    try editor.updateOperation();
+            },
+            .ChangeAngle => |*op| {
+                imgui.text("Change ArcAngle");
+
+                var angle_deg = std.math.radiansToDegrees(f32, op.angle);
+                if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
+                    op.angle = std.math.degreesToRadians(f32, angle_deg);
+                    try editor.updateOperation();
+                }
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&op.angle, op._pos_a, op._pos_b) };
             },
             .Order => |*op| {
                 imgui.text("Order");
@@ -237,10 +253,16 @@ pub fn onFrame() !void {
                 editor.capture = .{ .Offset = editor.Capture.Offset.init(&editor.operation.?.Move.offset) };
             }
         }
+        if (editor.Operation.Rotate.init(editor.getIS())) |op| {
+            if (imgui.menuItem("Rotate", "R", false, true)) {
+                try editor.setOperation(.{ .Rotate = op });
+                editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
+            }
+        }
         if (editor.Operation.ChangeAngle.init(editor.getIS())) |op| {
-            if (imgui.menuItem("Change Angle", "D", false, true)) {
+            if (imgui.menuItem("Change ArcAngle", "D", false, true)) {
                 try editor.setOperation(.{ .ChangeAngle = op });
-                editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
+                editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
             }
         }
         if (editor.Operation.Order.init(editor.getIS())) |op_| {

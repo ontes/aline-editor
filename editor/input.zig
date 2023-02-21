@@ -89,7 +89,13 @@ pub fn onEvent(event: platform.Event) !void {
                     try editor.updateOperation();
                 },
                 .Angle => |capture| {
-                    capture.angle.* = math.Arc.angleOnPoint(.{ .pos_a = capture.pos_a, .pos_b = capture.pos_b }, mouse_pos);
+                    const vec = mouse_pos - capture._origin;
+                    const prev_vec = prev_mouse_pos - capture._origin;
+                    capture.angle.* += std.math.atan2(f32, math.vec2.dot(vec, math.normal(prev_vec)), math.vec2.dot(vec, prev_vec)) * @as(f32, if (shift_pressed) 0.1 else 1);
+                    try editor.updateOperation();
+                },
+                .ArcAngle => |capture| {
+                    capture.angle.* = math.Arc.angleOnPoint(.{ .pos_a = capture._pos_a, .pos_b = capture._pos_b }, mouse_pos);
                     try editor.updateOperation();
                 },
             };
@@ -128,9 +134,13 @@ fn beginOperation(key: platform.Key) !void {
             try editor.setOperation(.{ .Move = op });
             editor.capture = .{ .Offset = editor.Capture.Offset.init(&editor.operation.?.Move.offset) };
         },
+        .r => if (editor.Operation.Rotate.init(editor.getIS())) |op| {
+            try editor.setOperation(.{ .Rotate = op });
+            editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
+        },
         .d => if (editor.Operation.ChangeAngle.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .ChangeAngle = op });
-            editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
+            editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
         },
         .delete => if (editor.Operation.Remove.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Remove = op });

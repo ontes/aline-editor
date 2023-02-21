@@ -169,10 +169,6 @@ pub fn TransformGenerator(comptime Child: type) type {
     };
 }
 
-pub fn pointInsideGenerator(point_pos: linalg.Vec2, inside: *bool) PointInsideGenerator {
-    return .{ .point_pos = point_pos, .inside = inside };
-}
-
 pub const PointInsideGenerator = struct {
     point_pos: linalg.Vec2,
     inside: *bool,
@@ -214,3 +210,49 @@ pub const PointInsideGenerator = struct {
         }
     };
 };
+pub fn pointInsideGenerator(point_pos: linalg.Vec2, inside: *bool) PointInsideGenerator {
+    return .{ .point_pos = point_pos, .inside = inside };
+}
+
+pub const BoundingBoxGenerator = struct {
+    min_pos: *linalg.Vec2,
+    max_pos: *linalg.Vec2,
+
+    pub fn begin(g: BoundingBoxGenerator) Pass {
+        return .{ .g = g };
+    }
+
+    fn addArc(g: BoundingBoxGenerator, arc: geometry.Arc) void {
+        const bounding_box = arc.boundingBox();
+        g.min_pos.* = @min(g.min_pos.*, bounding_box[0]);
+        g.max_pos.* = @max(g.max_pos.*, bounding_box[1]);
+    }
+
+    pub const Pass = struct {
+        g: BoundingBoxGenerator,
+        is_first: bool = true,
+        last_pos: linalg.Vec2 = undefined,
+        last_angle: f32 = undefined,
+        first_pos: linalg.Vec2 = undefined,
+
+        pub fn add(p: *Pass, pos: linalg.Vec2, angle: f32) !void {
+            if (p.is_first) {
+                p.first_pos = pos;
+                p.is_first = false;
+            } else {
+                p.g.addArc(.{ .pos_a = p.last_pos, .angle = p.last_angle, .pos_b = pos });
+            }
+            p.last_pos = pos;
+            p.last_angle = angle;
+        }
+
+        pub fn end(p: Pass) !void {
+            if (!std.math.isNan(p.last_angle)) {
+                p.g.addArc(.{ .pos_a = p.last_pos, .angle = p.last_angle, .pos_b = p.first_pos });
+            }
+        }
+    };
+};
+pub fn boundingBoxGenerator(min_pos: *linalg.Vec2, max_pos: *linalg.Vec2) BoundingBoxGenerator {
+    return .{ .min_pos = min_pos, .max_pos = max_pos };
+}

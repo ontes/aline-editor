@@ -37,6 +37,7 @@ pub const Operation = union(enum) {
     Append: Append,
     Connect: Connect,
     Move: Move,
+    Rotate: Rotate,
     Remove: Remove,
     ChangeAngle: ChangeAngle,
     Order: Order,
@@ -226,6 +227,35 @@ pub const Operation = union(enum) {
         }
     };
 
+    pub const Rotate = struct {
+        origin: math.Vec2,
+        angle: f32 = 0,
+
+        pub fn init(is: ImageSelection) ?Rotate {
+            if (is.len() == 0) return null;
+            const bounding_box = is.getBoundingBox();
+            return .{ .origin = (bounding_box[0] + bounding_box[1]) / math.vec2.splat(2) };
+        }
+
+        fn getMat(op: Rotate) math.Mat3 {
+            return math.mat3.mult(math.mat3.translate(op.origin), math.mat3.mult(math.mat3.rotate(0, 1, op.angle), math.mat3.translate(-op.origin)));
+        }
+
+        pub fn apply(op: Rotate, is: ImageSelection) !ImageSelection {
+            var out = try is.clone();
+            out.transformSelected(op.getMat());
+            return out;
+        }
+
+        pub fn generateHelper(op: Rotate, is: ImageSelection, gen: anytype) !void {
+            try is.generateSelected(math.transformGenerator(op.getMat(), getWideStroke().generator(gen)));
+            try is.generateTransformEdges(op.getMat(), getStroke().generator(gen));
+            var pass = getWideStroke().generator(gen).begin();
+            try pass.add(op.origin, std.math.nan_f32);
+            try pass.end();
+        }
+    };
+
     pub const Remove = struct {
         remove_single_nodes: bool = true,
 
@@ -358,6 +388,7 @@ pub const Capture = union(enum) {
     Position: Position,
     Offset: Offset,
     Angle: Angle,
+    ArcAngle: ArcAngle,
 
     pub fn cancel(any_capture: Capture) void {
         return switch (any_capture) {
@@ -367,39 +398,52 @@ pub const Capture = union(enum) {
 
     pub const Position = struct {
         pos: *math.Vec2,
-        orig_pos: math.Vec2,
+        _pos: math.Vec2,
 
         pub fn init(pos: *math.Vec2) Position {
-            return .{ .pos = pos, .orig_pos = pos.* };
+            return .{ .pos = pos, ._pos = pos.* };
         }
         pub fn cancel(cap: Position) void {
-            cap.pos.* = cap.orig_pos;
+            cap.pos.* = cap._pos;
         }
     };
 
     pub const Offset = struct {
         offset: *math.Vec2,
-        orig_offset: math.Vec2,
+        _offset: math.Vec2,
 
         pub fn init(offset: *math.Vec2) Offset {
-            return .{ .offset = offset, .orig_offset = offset.* };
+            return .{ .offset = offset, ._offset = offset.* };
         }
         pub fn cancel(cap: Offset) void {
-            cap.offset.* = cap.orig_offset;
+            cap.offset.* = cap._offset;
         }
     };
 
     pub const Angle = struct {
         angle: *f32,
-        orig_angle: f32,
-        pos_a: math.Vec2,
-        pos_b: math.Vec2,
+        _angle: f32,
+        _origin: math.Vec2,
 
-        pub fn init(angle: *f32, pos_a: math.Vec2, pos_b: math.Vec2) Angle {
-            return .{ .angle = angle, .orig_angle = angle.*, .pos_a = pos_a, .pos_b = pos_b };
+        pub fn init(angle: *f32, origin: math.Vec2) Angle {
+            return .{ .angle = angle, ._angle = angle.*, ._origin = origin };
         }
         pub fn cancel(cap: Angle) void {
-            cap.angle.* = cap.orig_angle;
+            cap.angle.* = cap._angle;
+        }
+    };
+
+    pub const ArcAngle = struct {
+        angle: *f32,
+        _angle: f32,
+        _pos_a: math.Vec2,
+        _pos_b: math.Vec2,
+
+        pub fn init(angle: *f32, pos_a: math.Vec2, pos_b: math.Vec2) ArcAngle {
+            return .{ .angle = angle, ._angle = angle.*, ._pos_a = pos_a, ._pos_b = pos_b };
+        }
+        pub fn cancel(cap: ArcAngle) void {
+            cap.angle.* = cap._angle;
         }
     };
 };

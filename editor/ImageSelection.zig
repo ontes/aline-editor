@@ -319,3 +319,10 @@ pub fn generateTransformEdges(is: ImageSelection, mat: math.Mat3, gen: anytype) 
         }
     }
 }
+
+pub fn getBoundingBox(is: ImageSelection) [2]math.Vec2 {
+    var min_pos: math.Vec2 = .{ std.math.inf_f32, std.math.inf_f32 };
+    var max_pos: math.Vec2 = .{ -std.math.inf_f32, -std.math.inf_f32 };
+    is.generateSelected(math.boundingBoxGenerator(&min_pos, &max_pos)) catch unreachable;
+    return .{ min_pos, max_pos };
+}
