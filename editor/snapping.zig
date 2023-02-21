@@ -46,7 +46,7 @@ pub fn select(image: Image, pos: math.Vec2, snap_dist: f32) ?SelectResult {
                 result = .{ .index = path.index, .val = .{ .segment = segment } };
             }
         }
-        if (path.isLooped() and path.getStyle().isFilled() and path.containsPoint(pos)) {
+        if (path.isLooped() and path.getStyle().isFilled() and path.isPointInside(pos)) {
             return result orelse .{ .index = path.index, .val = .loop };
         }
     }

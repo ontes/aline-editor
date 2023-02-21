@@ -137,21 +137,9 @@ pub const Path = struct {
         try p.generate(style.stroke.generator(buffer.generator(style.stroke_color)));
     }
 
-    // TODO: rework this into a generator
-    pub fn containsPoint(p: Path, point_pos: math.Vec2) bool {
-        std.debug.assert(p.offset != null);
-        std.debug.assert(p.isLooped());
+    pub fn isPointInside(p: Path, point_pos: math.Vec2) bool {
         var inside = false;
-        var index: usize = 0;
-        while (index < p.getSegmentCount()) : (index += 1) {
-            const arc = p.getArc(index);
-            const point_angle = arc.angleOnPoint(point_pos);
-            if (std.math.sign(point_angle) == std.math.sign(arc.pos_a[0] - point_pos[0]) and
-                std.math.sign(point_angle) == std.math.sign(point_pos[0] - arc.pos_b[0]))
-                inside = !inside;
-            if (std.math.sign(point_angle) == std.math.sign(arc.angle) and @fabs(point_angle) < @fabs(arc.angle))
-                inside = !inside;
-        }
+        p.generate(math.pointInsideGenerator(point_pos, &inside)) catch unreachable;
         return inside;
     }
 };
