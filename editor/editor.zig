@@ -38,6 +38,7 @@ pub const Operation = union(enum) {
     Connect: Connect,
     Move: Move,
     Rotate: Rotate,
+    Scale: Scale,
     Remove: Remove,
     ChangeAngle: ChangeAngle,
     Order: Order,
@@ -233,8 +234,7 @@ pub const Operation = union(enum) {
 
         pub fn init(is: ImageSelection) ?Rotate {
             if (is.len() == 0) return null;
-            const bounding_box = is.getBoundingBox();
-            return .{ .origin = (bounding_box[0] + bounding_box[1]) / math.vec2.splat(2) };
+            return .{ .origin = is.getAveragePoint() };
         }
 
         fn getMat(op: Rotate) math.Mat3 {
@@ -248,6 +248,35 @@ pub const Operation = union(enum) {
         }
 
         pub fn generateHelper(op: Rotate, is: ImageSelection, gen: anytype) !void {
+            try is.generateSelected(math.transformGenerator(op.getMat(), getWideStroke().generator(gen)));
+            try is.generateTransformEdges(op.getMat(), getStroke().generator(gen));
+            var pass = getWideStroke().generator(gen).begin();
+            try pass.add(op.origin, std.math.nan_f32);
+            try pass.end();
+        }
+    };
+
+    pub const Scale = struct {
+        origin: math.Vec2,
+        scale: math.Vec2 = .{ 1, 1 },
+        lock_aspect: bool = true,
+
+        pub fn init(is: ImageSelection) ?Scale {
+            if (is.len() == 0) return null;
+            return .{ .origin = is.getAveragePoint() };
+        }
+
+        fn getMat(op: Scale) math.Mat3 {
+            return math.mat3.mult(math.mat3.translate(op.origin), math.mat3.mult(math.mat3.scale(.{ op.scale[0], op.scale[1], 1 }), math.mat3.translate(-op.origin)));
+        }
+
+        pub fn apply(op: Scale, is: ImageSelection) !ImageSelection {
+            var out = try is.clone();
+            out.transformSelected(op.getMat());
+            return out;
+        }
+
+        pub fn generateHelper(op: Scale, is: ImageSelection, gen: anytype) !void {
             try is.generateSelected(math.transformGenerator(op.getMat(), getWideStroke().generator(gen)));
             try is.generateTransformEdges(op.getMat(), getStroke().generator(gen));
             var pass = getWideStroke().generator(gen).begin();
@@ -388,6 +417,7 @@ pub const Capture = union(enum) {
     Position: Position,
     Offset: Offset,
     Angle: Angle,
+    Scale: Scale,
     ArcAngle: ArcAngle,
 
     pub fn cancel(any_capture: Capture) void {
@@ -430,6 +460,20 @@ pub const Capture = union(enum) {
         }
         pub fn cancel(cap: Angle) void {
             cap.angle.* = cap._angle;
+        }
+    };
+
+    pub const Scale = struct {
+        scale: *math.Vec2,
+        _scale: math.Vec2,
+        _origin: math.Vec2,
+        _lock_aspect: bool,
+
+        pub fn init(scale: *math.Vec2, origin: math.Vec2, lock_aspect: bool) Scale {
+            return .{ .scale = scale, ._scale = scale.*, ._origin = origin, ._lock_aspect = lock_aspect };
+        }
+        pub fn cancel(cap: Scale) void {
+            cap.scale.* = cap._scale;
         }
     };
 

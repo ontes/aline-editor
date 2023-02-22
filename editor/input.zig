@@ -94,6 +94,12 @@ pub fn onEvent(event: platform.Event) !void {
                     capture.angle.* += std.math.atan2(f32, math.vec2.dot(vec, math.normal(prev_vec)), math.vec2.dot(vec, prev_vec)) * @as(f32, if (shift_pressed) 0.1 else 1);
                     try editor.updateOperation();
                 },
+                .Scale => |capture| {
+                    const vec = mouse_pos - capture._origin;
+                    const prev_vec = prev_mouse_pos - capture._origin;
+                    capture.scale.* *= if (capture._lock_aspect) math.vec2.splat(math.vec2.abs(vec) / math.vec2.abs(prev_vec)) else @fabs(vec / prev_vec);
+                    try editor.updateOperation();
+                },
                 .ArcAngle => |capture| {
                     capture.angle.* = math.Arc.angleOnPoint(.{ .pos_a = capture._pos_a, .pos_b = capture._pos_b }, mouse_pos);
                     try editor.updateOperation();
@@ -137,6 +143,10 @@ fn beginOperation(key: platform.Key) !void {
         .r => if (editor.Operation.Rotate.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Rotate = op });
             editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
+        },
+        .s => if (editor.Operation.Scale.init(editor.getIS())) |op| {
+            try editor.setOperation(.{ .Scale = op });
+            editor.capture = .{ .Scale = editor.Capture.Scale.init(&editor.operation.?.Scale.scale, op.origin, op.lock_aspect) };
         },
         .d => if (editor.Operation.ChangeAngle.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .ChangeAngle = op });

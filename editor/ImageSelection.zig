@@ -285,16 +285,21 @@ pub fn generateSelected(is: ImageSelection, gen: anytype) !void {
 }
 
 pub fn transformSelected(is: *ImageSelection, mat: math.Mat3) void {
+    const mat_det = math.mat3.determinant(mat);
     var i: usize = 0;
     while (i < is.len()) : (i += 1) {
         const ps = is.getComp(i);
         if (ps.isLooped()) {
             for (ps.path.getPositions()) |*pos|
                 pos.* = math.transform(mat, pos.*);
+            for (ps.path.getAngles()) |*ang|
+                ang.* *= std.math.sign(mat_det);
         } else {
             var node = ps.a;
-            while (node != ps.b) : (node = ps.path.nextNode(node))
+            while (node != ps.b) : (node = ps.path.nextNode(node)) {
                 ps.path.getPositions()[node] = math.transform(mat, ps.path.getPos(node));
+                ps.path.getAngles()[node] *= std.math.sign(mat_det);
+            }
             ps.path.getPositions()[node] = math.transform(mat, ps.path.getPos(node));
         }
     }
@@ -325,4 +330,11 @@ pub fn getBoundingBox(is: ImageSelection) [2]math.Vec2 {
     var max_pos: math.Vec2 = .{ -std.math.inf_f32, -std.math.inf_f32 };
     is.generateSelected(math.boundingBoxGenerator(&min_pos, &max_pos)) catch unreachable;
     return .{ min_pos, max_pos };
+}
+
+pub fn getAveragePoint(is: ImageSelection) math.Vec2 {
+    var sum: math.Vec2 = .{ 0, 0 };
+    var count: usize = 0;
+    is.generateSelected(math.pointSumGenerator(&sum, &count)) catch unreachable;
+    return sum / math.vec2.splat(@intToFloat(f32, count));
 }

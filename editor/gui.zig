@@ -191,6 +191,28 @@ pub fn onFrame() !void {
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op.origin) };
             },
+            .Scale => |*op| {
+                imgui.text("Scale");
+
+                if (imgui.inputFloat2("origin", &op.origin[0], null, .{}))
+                    try editor.updateOperation();
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.origin) };
+
+                _ = imgui.checkbox("lock aspect ratio", &op.lock_aspect);
+
+                if (op.lock_aspect) {
+                    if (imgui.inputFloat("scale", &op.scale[0], 0, 0, null, .{})) {
+                        op.scale[1] = op.scale[0];
+                        try editor.updateOperation();
+                    }
+                } else {
+                    if (imgui.inputFloat2("scale", &op.scale[0], null, .{}))
+                        try editor.updateOperation();
+                }
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Scale = editor.Capture.Scale.init(&op.scale, op.origin, op.lock_aspect) };
+            },
             .Remove => |*op| {
                 imgui.text("Remove");
 
@@ -257,6 +279,12 @@ pub fn onFrame() !void {
             if (imgui.menuItem("Rotate", "R", false, true)) {
                 try editor.setOperation(.{ .Rotate = op });
                 editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
+            }
+        }
+        if (editor.Operation.Scale.init(editor.getIS())) |op| {
+            if (imgui.menuItem("Scale", "S", false, true)) {
+                try editor.setOperation(.{ .Scale = op });
+                editor.capture = .{ .Scale = editor.Capture.Scale.init(&editor.operation.?.Scale.scale, op.origin, op.lock_aspect) };
             }
         }
         if (editor.Operation.ChangeAngle.init(editor.getIS())) |op| {

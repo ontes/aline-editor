@@ -166,6 +166,7 @@ pub fn TransformGenerator(comptime Child: type) type {
     };
 }
 pub fn transformGenerator(mat: linalg.Mat3, child: anytype) TransformGenerator(@TypeOf(child)) {
+    std.debug.print("det: {}\n", .{linalg.mat3.determinant(mat)});
     return .{ .mat = mat, .mat_det = linalg.mat3.determinant(mat), .child = child };
 }
 
@@ -255,4 +256,27 @@ pub const BoundingBoxGenerator = struct {
 };
 pub fn boundingBoxGenerator(min_pos: *linalg.Vec2, max_pos: *linalg.Vec2) BoundingBoxGenerator {
     return .{ .min_pos = min_pos, .max_pos = max_pos };
+}
+
+pub const PointSumGenerator = struct {
+    sum: *linalg.Vec2,
+    count: *usize,
+
+    pub fn begin(g: PointSumGenerator) Pass {
+        return .{ .g = g };
+    }
+
+    pub const Pass = struct {
+        g: PointSumGenerator,
+
+        pub fn add(p: Pass, pos: linalg.Vec2, _: f32) !void {
+            p.g.sum.* += pos;
+            p.g.count.* += 1;
+        }
+
+        pub fn end(_: Pass) !void {}
+    };
+};
+pub fn pointSumGenerator(sum: *linalg.Vec2, count: *usize) PointSumGenerator {
+    return .{ .sum = sum, .count = count };
 }
