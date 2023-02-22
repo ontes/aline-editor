@@ -275,14 +275,49 @@ pub fn onFrame() !void {
                 editor.capture = .{ .Offset = editor.Capture.Offset.init(&editor.operation.?.Move.offset) };
             }
         }
-        if (editor.Operation.Rotate.init(editor.getIS())) |op| {
-            if (imgui.menuItem("Rotate", "R", false, true)) {
+        if (editor.Operation.Rotate.init(editor.getIS())) |op_| {
+            var op = op_;
+            if (imgui.beginMenu("Rotate", true)) {
+                if (imgui.menuItem("Rotate CW 90°", null, false, true)) {
+                    op.angle = std.math.degreesToRadians(f32, -90);
+                    try editor.setOperation(.{ .Rotate = op });
+                }
+                if (imgui.menuItem("Rotate CCW 90°", null, false, true)) {
+                    op.angle = std.math.degreesToRadians(f32, 90);
+                    try editor.setOperation(.{ .Rotate = op });
+                }
+                if (imgui.menuItem("Rotate 180°", null, false, true)) {
+                    op.angle = std.math.degreesToRadians(f32, 180);
+                    try editor.setOperation(.{ .Rotate = op });
+                }
+                imgui.endMenu();
+            }
+            if (imgui.isItemClicked(.left)) {
                 try editor.setOperation(.{ .Rotate = op });
                 editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
             }
         }
-        if (editor.Operation.Scale.init(editor.getIS())) |op| {
-            if (imgui.menuItem("Scale", "S", false, true)) {
+        if (editor.Operation.Scale.init(editor.getIS())) |op_| {
+            var op = op_;
+            if (imgui.beginMenu("Scale", true)) {
+                if (imgui.menuItem("Flip horizontally", null, false, true)) {
+                    op.lock_aspect = false;
+                    op.scale[0] = -1;
+                    try editor.setOperation(.{ .Scale = op });
+                }
+                if (imgui.menuItem("Flip vertically", null, false, true)) {
+                    op.lock_aspect = false;
+                    op.scale[1] = -1;
+                    try editor.setOperation(.{ .Scale = op });
+                }
+                if (imgui.menuItem("Transpose", null, false, true)) {
+                    op.scale[0] = -1;
+                    op.scale[1] = -1;
+                    try editor.setOperation(.{ .Scale = op });
+                }
+                imgui.endMenu();
+            }
+            if (imgui.isItemClicked(.left)) {
                 try editor.setOperation(.{ .Scale = op });
                 editor.capture = .{ .Scale = editor.Capture.Scale.init(&editor.operation.?.Scale.scale, op.origin, op.lock_aspect) };
             }
