@@ -89,6 +89,27 @@ pub fn mat(comptime len: comptime_int, comptime Scalar: type) type {
             return res;
         }
 
+        pub fn determinant(m: Matrix) Scalar {
+            if (len == 1)
+                return m[0][0];
+            const lmat = mat(len - 1, Scalar);
+
+            var res: Scalar = 0;
+            comptime var i = 0;
+            inline while (i < len) : (i += 1) {
+                var lm: lmat.Matrix = undefined;
+                comptime var x = 0;
+                inline while (x + 1 < len) : (x += 1) {
+                    comptime var y = 0;
+                    inline while (y + 1 < len) : (y += 1) {
+                        lm[x][y] = m[if (x < i) x else x + 1][y + 1];
+                    }
+                }
+                res += lmat.determinant(lm) * m[i][0] * (if (i % 2 == 0) 1 else -1);
+            }
+            return res;
+        }
+
         pub fn translate(v: @Vector(len - 1, Scalar)) Matrix {
             var res = id;
             comptime var i = 0;

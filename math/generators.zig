@@ -139,13 +139,10 @@ pub fn StrokeGenerator(comptime Child: type) type {
     };
 }
 
-pub fn transformGenerator(mat: linalg.Mat3, child: anytype) TransformGenerator(@TypeOf(child)) {
-    return .{ .mat = mat, .child = child };
-}
-
 pub fn TransformGenerator(comptime Child: type) type {
     return struct {
         mat: linalg.Mat3,
+        mat_det: f32,
         child: Child,
 
         const Generator = @This();
@@ -159,7 +156,7 @@ pub fn TransformGenerator(comptime Child: type) type {
             child_pass: Child.Pass,
 
             pub fn add(p: *Pass, pos: linalg.Vec2, angle: f32) !void {
-                return p.child_pass.add(geometry.transform(p.g.mat, pos), angle); // TODO multiply angle by sign of determinant
+                return p.child_pass.add(geometry.transform(p.g.mat, pos), angle * std.math.sign(p.g.mat_det));
             }
 
             pub fn end(p: Pass) !void {
@@ -167,6 +164,9 @@ pub fn TransformGenerator(comptime Child: type) type {
             }
         };
     };
+}
+pub fn transformGenerator(mat: linalg.Mat3, child: anytype) TransformGenerator(@TypeOf(child)) {
+    return .{ .mat = mat, .mat_det = linalg.mat3.determinant(mat), .child = child };
 }
 
 pub const PointInsideGenerator = struct {
