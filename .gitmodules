@@ -1,6 +1,6 @@
 [submodule "dawn-zig"]
-	path = dawn-zig
+	path = lib/dawn
 	url = https://github.com/ontes/dawn-zig.git
 [submodule "imgui-zig"]
-	path = imgui-zig
+	path = lib/imgui
 	url = https://github.com/ontes/imgui-zig.git

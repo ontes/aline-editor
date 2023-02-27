@@ -1,31 +1,31 @@
 const std = @import("std");
-const imgui_build = @import("imgui-zig/build.zig");
-const dawn_build = @import("dawn-zig/build.zig");
+const imgui_build = @import("lib/imgui/build.zig");
+const dawn_build = @import("lib/dawn/build.zig");
 
 const webgpu_pkg = std.build.Pkg{
     .name = "webgpu",
-    .source = .{ .path = "dawn-zig/webgpu.zig" },
+    .source = .{ .path = "lib/dawn/webgpu.zig" },
 };
 const platform_pkg = std.build.Pkg{
     .name = "platform",
-    .source = .{ .path = "platform/platform.zig" },
+    .source = .{ .path = "src/platform/platform.zig" },
 };
 const math_pkg = std.build.Pkg{
     .name = "math",
-    .source = .{ .path = "math/math.zig" },
+    .source = .{ .path = "src/math/math.zig" },
 };
 const render_pkg = std.build.Pkg{
     .name = "render",
-    .source = .{ .path = "render/render.zig" },
+    .source = .{ .path = "src/render/render.zig" },
     .dependencies = &.{ webgpu_pkg, platform_pkg, math_pkg },
 };
 const imgui_pkg = std.build.Pkg{
     .name = "imgui",
-    .source = .{ .path = "imgui-zig/imgui.zig" },
+    .source = .{ .path = "lib/imgui/imgui.zig" },
 };
 const imgui_impl_wgpu_pkg = std.build.Pkg{
     .name = "imgui_impl_wgpu",
-    .source = .{ .path = "imgui-zig/imgui_impl_wgpu.zig" },
+    .source = .{ .path = "lib/imgui/imgui_impl_wgpu.zig" },
     .dependencies = &.{ imgui_pkg, webgpu_pkg },
 };
 
@@ -34,17 +34,17 @@ pub fn build(b: *std.build.Builder) !void {
     const mode = b.standardReleaseOptions();
     const os_tag = target.os_tag orelse @import("builtin").target.os.tag;
 
-    const exe = b.addExecutable("aline-editor", "editor/main.zig");
+    const exe = b.addExecutable("aline-editor", "src/editor/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
 
     // dawn-zig
-    if (std.fs.cwd().access("dawn-zig/zig-out", .{})) |_| { // don't build dawn when dawn binary is available
-        std.debug.print("Using webgpu_dawn library from 'dawn-zig/zig-out/lib'\n", .{});
-        exe.addLibraryPath("dawn-zig/zig-out/lib");
+    if (std.fs.cwd().access("lib/dawn/zig-out", .{})) |_| { // don't build dawn when dawn binary is available
+        std.debug.print("Using webgpu_dawn library from 'lib/dawn/zig-out/lib'\n", .{});
+        exe.addLibraryPath("lib/dawn/zig-out/lib");
         exe.linkSystemLibrary("webgpu_dawn");
-        exe.addIncludePath("dawn-zig/dawn/include");
-        exe.addIncludePath("dawn-zig/dawn-gen/include");
+        exe.addIncludePath("lib/dawn/dawn/include");
+        exe.addIncludePath("lib/dawn/dawn-gen/include");
     } else |_| {
         dawn_build.link(exe, .{
             .enable_d3d12 = false,
@@ -55,13 +55,13 @@ pub fn build(b: *std.build.Builder) !void {
             .enable_vulkan = true,
             .use_wayland = false,
             .use_x11 = os_tag == .linux,
-        }, "dawn-zig/");
+        }, "lib/dawn/");
     }
     exe.addPackage(webgpu_pkg);
 
     // imgui-zig
-    imgui_build.link(exe, "imgui-zig/");
-    imgui_build.linkImpl(exe, "wgpu", "imgui-zig/");
+    imgui_build.link(exe, "lib/imgui/");
+    imgui_build.linkImpl(exe, "wgpu", "lib/imgui/");
     exe.addPackage(imgui_pkg);
     exe.addPackage(imgui_impl_wgpu_pkg);
 
@@ -87,7 +87,7 @@ pub fn build(b: *std.build.Builder) !void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const exe_tests = b.addTest("editor/main.zig");
+    const exe_tests = b.addTest("src/editor/main.zig");
     exe_tests.setTarget(target);
     exe_tests.setBuildMode(mode);
     b.step("test", "Run unit tests").dependOn(&exe_tests.step);
