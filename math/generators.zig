@@ -166,7 +166,6 @@ pub fn TransformGenerator(comptime Child: type) type {
     };
 }
 pub fn transformGenerator(mat: linalg.Mat3, child: anytype) TransformGenerator(@TypeOf(child)) {
-    std.debug.print("det: {}\n", .{linalg.mat3.determinant(mat)});
     return .{ .mat = mat, .mat_det = linalg.mat3.determinant(mat), .child = child };
 }
 

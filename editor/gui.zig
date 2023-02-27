@@ -220,10 +220,10 @@ pub fn onFrame() !void {
                     try editor.updateOperation();
             },
             .ChangeAngle => |*op| {
-                imgui.text("Change ArcAngle");
+                imgui.text("Change Angle");
 
                 var angle_deg = std.math.radiansToDegrees(f32, op.angle);
-                if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
+                if (imgui.inputFloat("##angle", &angle_deg, 0, 0, null, .{})) {
                     op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
                 }
