@@ -8,6 +8,7 @@ const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 const editor = @import("editor.zig");
 
 var last_time: u128 = 0;
+var preferences_open: bool = false;
 
 pub fn init(device: *webgpu.Device) void {
     _ = imgui.createContext(null);
@@ -363,6 +364,13 @@ pub fn onFrame() !void {
 
     if (imgui.beginMainMenuBar()) {
         if (imgui.beginMenu("File", true)) {
+            if (imgui.menuItem("Preferences", null, false, !preferences_open)) {
+                preferences_open = true;
+            }
+            imgui.separator();
+            if (imgui.menuItem("Exit", null, false, true)) {
+                editor.should_run = false;
+            }
             imgui.endMenu();
         }
         if (imgui.beginMenu("Edit", true)) {
@@ -385,6 +393,40 @@ pub fn onFrame() !void {
         }
 
         imgui.endMainMenuBar();
+    }
+
+    if (preferences_open) {
+        imgui.setNextWindowSize(.{ .x = 512, .y = 512 }, .once);
+        if (imgui.begin("Preferences", &preferences_open, .{})) {
+            if (imgui.colorEdit4("canvas color", &editor.canvas_color, .{}))
+                editor.should_draw_canvas = true;
+            if (imgui.inputFloat2("canvas size", &editor.canvas_size[0], null, .{}))
+                editor.should_draw_canvas = true;
+
+            imgui.separator();
+
+            _ = imgui.checkbox("operation live preview", &editor.live_preview);
+
+            imgui.separator();
+
+            if (imgui.colorEdit4("default fill color", &editor.default_style.fill_color, .{}))
+                try editor.updateOperation();
+            if (imgui.colorEdit4("default stroke color", &editor.default_style.stroke_color, .{}))
+                try editor.updateOperation();
+            if (imgui.inputFloat("default stroke width", &editor.default_style.stroke.width, 0, 0, null, .{}))
+                try editor.updateOperation();
+            if (imgui.beginCombo("default stroke cap", @tagName(editor.default_style.stroke.cap), .{})) {
+                inline for (@typeInfo(math.Stroke.CapStyle).Enum.fields) |field| {
+                    const tag = @field(math.Stroke.CapStyle, field.name);
+                    if (imgui.selectable(field.name ++ "", editor.default_style.stroke.cap == tag, .{}, .{ .x = 0, .y = 0 })) {
+                        editor.default_style.stroke.cap = tag;
+                        try editor.updateOperation();
+                    }
+                }
+                imgui.endCombo();
+            }
+        }
+        imgui.end();
     }
 
     imgui.render();

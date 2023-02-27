@@ -12,7 +12,8 @@ pub var operation: ?Operation = null;
 pub var capture: ?Capture = null;
 pub var operation_is_new = false;
 
-const live_preview = true;
+pub var should_run = true;
+pub var live_preview = true;
 pub var should_draw_canvas = true;
 pub var should_draw_image = true;
 pub var should_draw_helper = true;
@@ -21,10 +22,10 @@ pub var should_update_transform = true;
 pub var window_size: math.Vec2 = .{ 0, 0 };
 pub var canvas_pan: math.Vec2 = .{ 0, 0 };
 pub var canvas_zoom: f32 = 1;
-const canvas_size = math.Vec2{ 512, 512 };
-const canvas_color = [4]f32{ 1, 1, 1, 1 };
+pub var canvas_size = math.Vec2{ 512, 512 };
+pub var canvas_color = [4]f32{ 1, 1, 1, 1 };
 
-const default_style = Image.Path.Style{
+pub var default_style = Image.Path.Style{
     .stroke = .{ .width = 2, .cap = .round },
     .fill_color = .{ 0.5, 0.5, 0.5, 1 },
     .stroke_color = .{ 0, 0, 0, 1 },
@@ -112,7 +113,7 @@ pub const Operation = union(enum) {
 
     pub const AddPoint = struct {
         position: math.Vec2 = .{ 0, 0 },
-        style: Image.Path.Style = default_style,
+        style: Image.Path.Style,
         name: Image.Path.Name,
 
         fn getDefaultName(index: usize) Image.Path.Name {
@@ -121,7 +122,7 @@ pub const Operation = union(enum) {
 
         pub fn init(is: ImageSelection) ?AddPoint {
             if (is.len() != 0) return null;
-            return .{ .name = getDefaultName(is.image.len()) };
+            return .{ .style = default_style, .name = getDefaultName(is.image.len()) };
         }
 
         pub fn apply(op: AddPoint, is: ImageSelection) !ImageSelection {

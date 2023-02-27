@@ -111,6 +111,7 @@ pub fn onEvent(event: platform.Event) !void {
             editor.should_update_transform = true;
             editor.should_draw_helper = true;
         },
+        .window_close => editor.should_run = false,
         else => {},
     }
 }

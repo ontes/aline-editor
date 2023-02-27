@@ -14,7 +14,6 @@ var window: platform.Window = undefined;
 var context: render.Context = undefined;
 var buffers: [3]render.Buffer = undefined;
 
-var should_run = true;
 var time: i128 = undefined;
 
 fn init(allocator: std.mem.Allocator) !void {
@@ -90,7 +89,6 @@ fn onRender(pass: *webgpu.RenderPassEncoder) void {
 
 fn onEvent(event: platform.Event, _: platform.Window) !void {
     switch (event) {
-        .window_close => should_run = false,
         .window_resize => |size| context.onWindowResize(size),
         else => {},
     }
@@ -105,7 +103,7 @@ pub fn main() !void {
     try init(gpa.allocator());
     defer deinit();
 
-    while (should_run) {
+    while (editor.should_run) {
         try onFrame();
     }
 }
