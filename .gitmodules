@@ -4,3 +4,6 @@
 [submodule "imgui-zig"]
 	path = lib/imgui
 	url = https://github.com/ontes/imgui-zig.git
+[submodule "lib/nativefiledialogs/nativefiledialogs"]
+	path = lib/nativefiledialogs/nativefiledialogs
+	url = https://github.com/mlabbe/nativefiledialog.git

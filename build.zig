@@ -1,6 +1,7 @@
 const std = @import("std");
 const imgui_build = @import("lib/imgui/build.zig");
 const dawn_build = @import("lib/dawn/build.zig");
+const nativefiledialogs_build = @import("lib/nativefiledialogs/build.zig");
 
 const webgpu_pkg = std.build.Pkg{
     .name = "webgpu",
@@ -28,6 +29,10 @@ const imgui_impl_wgpu_pkg = std.build.Pkg{
     .source = .{ .path = "lib/imgui/imgui_impl_wgpu.zig" },
     .dependencies = &.{ imgui_pkg, webgpu_pkg },
 };
+const nfd_pkg = std.build.Pkg{
+    .name = "nfd",
+    .source = .{ .path = "lib/nativefiledialogs/nfd.zig" },
+};
 
 pub fn build(b: *std.build.Builder) !void {
     const target = b.standardTargetOptions(.{});
@@ -38,7 +43,7 @@ pub fn build(b: *std.build.Builder) !void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
 
-    // dawn-zig
+    // dawn
     if (std.fs.cwd().access("lib/dawn/zig-out", .{})) |_| { // don't build dawn when dawn binary is available
         std.debug.print("Using webgpu_dawn library from 'lib/dawn/zig-out/lib'\n", .{});
         exe.addLibraryPath("lib/dawn/zig-out/lib");
@@ -59,11 +64,19 @@ pub fn build(b: *std.build.Builder) !void {
     }
     exe.addPackage(webgpu_pkg);
 
-    // imgui-zig
+    // imgui
     imgui_build.link(exe, "lib/imgui/");
     imgui_build.linkImpl(exe, "wgpu", "lib/imgui/");
     exe.addPackage(imgui_pkg);
     exe.addPackage(imgui_impl_wgpu_pkg);
+
+    // nativefiledialogs
+    const nfd_lib = b.addStaticLibrary("nfd", null);
+    nfd_lib.setTarget(target);
+    nfd_lib.setBuildMode(mode);
+    nativefiledialogs_build.link(nfd_lib, "lib/nativefiledialogs/");
+    exe.linkLibrary(nfd_lib);
+    exe.addPackage(nfd_pkg);
 
     // platform
     switch (target.os_tag orelse @import("builtin").target.os.tag) {

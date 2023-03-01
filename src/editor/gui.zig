@@ -4,8 +4,11 @@ const platform = @import("platform");
 const webgpu = @import("webgpu");
 const imgui = @import("imgui");
 const imgui_impl_wgpu = @import("imgui_impl_wgpu");
+const nfd = @import("nfd");
 
 const editor = @import("editor.zig");
+const storage = @import("storage.zig");
+const ImageSelection = @import("ImageSelection.zig");
 
 var last_time: u128 = 0;
 var preferences_open: bool = false;
@@ -364,6 +367,28 @@ pub fn onFrame() !void {
 
     if (imgui.beginMainMenuBar()) {
         if (imgui.beginMenu("File", true)) {
+            if (imgui.menuItem("Open", null, false, true)) {
+                var path: [*:0]u8 = undefined;
+                if (nfd.openDialog(null, null, &path) == .okay) {
+                    const file = try std.fs.openFileAbsoluteZ(path, .{});
+                    defer file.close();
+                    const image = try storage.readImage(file, editor.history.get().image.allocator);
+                    editor.history.entries.clearRetainingCapacity();
+                    try editor.history.add(.{ .image = image });
+                    editor.should_draw_image = true;
+                    editor.should_draw_helper = true;
+                    editor.should_draw_canvas = true;
+                }
+            }
+            if (imgui.menuItem("Save", null, false, true)) {
+                var path: [*:0]u8 = undefined;
+                if (nfd.saveDialog(null, null, &path) == .okay) {
+                    const file = try std.fs.createFileAbsoluteZ(path, .{});
+                    defer file.close();
+                    try storage.writeImage(file, editor.history.get().image);
+                }
+            }
+            imgui.separator();
             if (imgui.menuItem("Preferences", null, false, !preferences_open)) {
                 preferences_open = true;
             }
