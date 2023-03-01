@@ -3,9 +3,9 @@ const math = @import("math");
 const platform = @import("platform");
 const webgpu = @import("webgpu");
 
-const webgpu_utils = @import("webgpu_utils.zig");
+const err = error.WebgpuError;
 
-const err = error.RendererError;
+const Context = @import("Context.zig");
 
 const vs_source =
     \\  struct Entry {
@@ -71,106 +71,57 @@ const Entry = extern struct {
     color: [4]f32 align(16),
 };
 
-pub const Context = struct {
-    instance: *webgpu.Instance,
-    surface: *webgpu.Surface,
-    adapter: *webgpu.Adapter,
-    device: *webgpu.Device,
-    swapchain: *webgpu.SwapChain,
-    bind_group_layout: *webgpu.BindGroupLayout,
-    pipeline: *webgpu.RenderPipeline,
+pub fn createBindGroupLayout(device: *webgpu.Device) *webgpu.BindGroupLayout {
+    return device.createBindGroupLayout(&.{
+        .entry_count = 4,
+        .entries = &[4]webgpu.BindGroupLayoutEntry{
+            .{ .binding = 0, .visibility = .{ .vertex = true }, .buffer = .{ .binding_type = .uniform } },
+            .{ .binding = 1, .visibility = .{ .vertex = true, .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
+            .{ .binding = 2, .visibility = .{ .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
+            .{ .binding = 3, .visibility = .{ .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
+        },
+    });
+}
 
-    pub fn init(window: platform.Window) !Context {
-        const instance = webgpu.createInstance(&.{});
-        const surface = webgpu_utils.createSurface(instance, window);
-        const adapter = try webgpu_utils.createAdapter(instance, surface);
-        const device = try webgpu_utils.createDevice(adapter);
-        const swapchain = webgpu_utils.createSwapchain(device, surface, try window.getSize());
-
-        const bind_group_layout = device.createBindGroupLayout(&.{
-            .entry_count = 4,
-            .entries = &[4]webgpu.BindGroupLayoutEntry{
-                .{ .binding = 0, .visibility = .{ .vertex = true }, .buffer = .{ .binding_type = .uniform } },
-                .{ .binding = 1, .visibility = .{ .vertex = true, .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
-                .{ .binding = 2, .visibility = .{ .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
-                .{ .binding = 3, .visibility = .{ .fragment = true }, .buffer = .{ .binding_type = .read_only_storage } },
-            },
-        });
-
-        const pipeline = device.createRenderPipeline(&.{
-            .layout = device.createPipelineLayout(&.{
-                .bind_group_layout_count = 1,
-                .bind_group_layouts = &[1]*webgpu.BindGroupLayout{bind_group_layout},
+pub fn createPipeline(device: *webgpu.Device, bind_group_layout: *webgpu.BindGroupLayout, output_format: webgpu.TextureFormat) *webgpu.RenderPipeline {
+    return device.createRenderPipeline(&.{
+        .layout = device.createPipelineLayout(&.{
+            .bind_group_layout_count = 1,
+            .bind_group_layouts = &[1]*webgpu.BindGroupLayout{bind_group_layout},
+        }),
+        .vertex = .{
+            .module = device.createShaderModule(&.{
+                .next_in_chain = &webgpu.ShaderModuleWGSLDescriptor{ .source = vs_source },
             }),
-            .vertex = .{
-                .module = device.createShaderModule(&.{
-                    .next_in_chain = &webgpu.ShaderModuleWGSLDescriptor{ .source = vs_source },
-                }),
-                .entry_point = "main",
-                .buffer_count = 0,
-                .buffers = &[0]webgpu.VertexBufferLayout{},
-            },
-            .primitive = .{
-                .topology = .triangle_strip,
-            },
-            .fragment = &webgpu.FragmentState{
-                .module = device.createShaderModule(&.{
-                    .next_in_chain = &webgpu.ShaderModuleWGSLDescriptor{ .source = fs_source },
-                }),
-                .entry_point = "main",
-                .target_count = 1,
-                .targets = &[1]webgpu.ColorTargetState{.{
-                    .format = .bgra8_unorm,
-                    .blend = &.{
-                        .color = .{
-                            .src_factor = .src_alpha,
-                            .dst_factor = .one_minus_src_alpha,
-                        },
+            .entry_point = "main",
+            .buffer_count = 0,
+            .buffers = &[0]webgpu.VertexBufferLayout{},
+        },
+        .primitive = .{
+            .topology = .triangle_strip,
+        },
+        .fragment = &webgpu.FragmentState{
+            .module = device.createShaderModule(&.{
+                .next_in_chain = &webgpu.ShaderModuleWGSLDescriptor{ .source = fs_source },
+            }),
+            .entry_point = "main",
+            .target_count = 1,
+            .targets = &[1]webgpu.ColorTargetState{.{
+                .format = output_format,
+                .blend = &.{
+                    .color = .{
+                        .src_factor = .src_alpha,
+                        .dst_factor = .one_minus_src_alpha,
                     },
-                }},
-            },
-        });
-
-        return .{
-            .instance = instance,
-            .surface = surface,
-            .adapter = adapter,
-            .device = device,
-            .swapchain = swapchain,
-            .bind_group_layout = bind_group_layout,
-            .pipeline = pipeline,
-        };
-    }
-
-    pub fn deinit(context: *Context) void {
-        context.device.destroy();
-    }
-
-    pub fn onWindowResize(context: *Context, size: [2]u32) void {
-        context.swapchain = webgpu_utils.createSwapchain(context.device, context.surface, size);
-    }
-
-    pub fn render(context: Context, comptime draw_fn: fn (pass: *webgpu.RenderPassEncoder) void) void {
-        const command_encoder = context.device.createCommandEncoder(&.{});
-        const pass = command_encoder.beginRenderPass(&.{
-            .color_attachment_count = 1,
-            .color_attachments = &[1]webgpu.RenderPassColorAttachment{.{
-                .view = context.swapchain.getCurrentTextureView(),
-                .load_op = .clear,
-                .store_op = .store,
-                .clear_value = .{ .r = 0.8, .g = 0.8, .b = 0.8, .a = 1 },
+                },
             }},
-        });
-        draw_fn(pass);
-        pass.end();
-        var command_buffer = command_encoder.finish(&.{});
-        context.device.getQueue().submit(1, &[1]*webgpu.CommandBuffer{command_buffer});
-        context.swapchain.present();
-    }
-};
+        },
+    });
+}
 
 pub const Buffer = struct {
-    context: *const Context,
+    device: *webgpu.Device,
+    bind_group_layout: *webgpu.BindGroupLayout,
     allocator: std.mem.Allocator,
 
     transform_buffer: *webgpu.Buffer,
@@ -183,14 +134,15 @@ pub const Buffer = struct {
     entries: std.ArrayListUnmanaged(Entry) = .{},
     data: std.MultiArrayList(struct { position: @Vector(2, f32), angle: f32 }) = .{},
 
-    pub fn init(context: *const Context, allocator: std.mem.Allocator) Buffer {
+    pub fn init(device: *webgpu.Device, bind_group_layout: *webgpu.BindGroupLayout, allocator: std.mem.Allocator) Buffer {
         return .{
-            .context = context,
+            .device = device,
+            .bind_group_layout = bind_group_layout,
             .allocator = allocator,
-            .transform_buffer = context.device.createBuffer(&.{ .usage = .{ .uniform = true, .copy_dst = true }, .size = @sizeOf(math.Mat3) }),
-            .entries_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
-            .positions_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
-            .angles_buffer = context.device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
+            .transform_buffer = device.createBuffer(&.{ .usage = .{ .uniform = true, .copy_dst = true }, .size = @sizeOf(math.Mat3) }),
+            .entries_buffer = device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
+            .positions_buffer = device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
+            .angles_buffer = device.createBuffer(&.{ .usage = .{ .storage = true, .copy_dst = true }, .size = 0 }),
         };
     }
 
@@ -203,7 +155,7 @@ pub const Buffer = struct {
     }
 
     pub fn setTransform(buffer: *Buffer, transform: math.Mat3) void {
-        buffer.context.device.getQueue().writeBuffer(buffer.transform_buffer, 0, &transform, @sizeOf(math.Mat3));
+        buffer.device.getQueue().writeBuffer(buffer.transform_buffer, 0, &transform, @sizeOf(math.Mat3));
     }
 
     pub fn clear(buffer: *Buffer) void {
@@ -218,34 +170,34 @@ pub const Buffer = struct {
 
         if (entries_size > buffer.entries_buffer.getSize()) {
             buffer.entries_buffer.destroy();
-            buffer.entries_buffer = buffer.context.device.createBuffer(&.{
+            buffer.entries_buffer = buffer.device.createBuffer(&.{
                 .usage = .{ .storage = true, .copy_dst = true },
                 .size = entries_size,
             });
         }
         if (positions_size > buffer.positions_buffer.getSize()) {
             buffer.positions_buffer.destroy();
-            buffer.positions_buffer = buffer.context.device.createBuffer(&.{
+            buffer.positions_buffer = buffer.device.createBuffer(&.{
                 .usage = .{ .storage = true, .copy_dst = true },
                 .size = positions_size,
             });
         }
         if (angles_size > buffer.angles_buffer.getSize()) {
             buffer.angles_buffer.destroy();
-            buffer.angles_buffer = buffer.context.device.createBuffer(&.{
+            buffer.angles_buffer = buffer.device.createBuffer(&.{
                 .usage = .{ .storage = true, .copy_dst = true },
                 .size = angles_size,
             });
         }
 
-        buffer.context.device.getQueue().writeBuffer(buffer.entries_buffer, 0, buffer.entries.items.ptr, entries_size);
-        buffer.context.device.getQueue().writeBuffer(buffer.positions_buffer, 0, buffer.data.items(.position).ptr, positions_size);
-        buffer.context.device.getQueue().writeBuffer(buffer.angles_buffer, 0, buffer.data.items(.angle).ptr, angles_size);
+        buffer.device.getQueue().writeBuffer(buffer.entries_buffer, 0, buffer.entries.items.ptr, entries_size);
+        buffer.device.getQueue().writeBuffer(buffer.positions_buffer, 0, buffer.data.items(.position).ptr, positions_size);
+        buffer.device.getQueue().writeBuffer(buffer.angles_buffer, 0, buffer.data.items(.angle).ptr, angles_size);
 
         buffer.path_count = @intCast(u32, buffer.entries.items.len);
 
-        buffer.bind_group = if (entries_size > 0) buffer.context.device.createBindGroup(&.{
-            .layout = buffer.context.bind_group_layout,
+        buffer.bind_group = if (entries_size > 0) buffer.device.createBindGroup(&.{
+            .layout = buffer.bind_group_layout,
             .entry_count = 4,
             .entries = &[4]webgpu.BindGroupEntry{
                 .{ .binding = 0, .buffer = buffer.transform_buffer, .offset = 0, .size = @sizeOf(math.Mat3) },
@@ -256,9 +208,8 @@ pub const Buffer = struct {
         }) else null;
     }
 
-    pub fn render(buffer: Buffer, pass: *webgpu.RenderPassEncoder) void {
+    pub fn draw(buffer: Buffer, pass: *webgpu.RenderPassEncoder) void {
         if (buffer.bind_group) |bind_group| {
-            pass.setPipeline(buffer.context.pipeline);
             pass.setBindGroup(0, bind_group, 0, &[0]u32{});
             pass.draw(4, buffer.path_count, 0, 0);
         }

@@ -1,6 +1,5 @@
 const std = @import("std");
 const math = @import("math");
-const render = @import("render");
 
 const Image = @This();
 
@@ -130,7 +129,7 @@ pub const Path = struct {
         try pass.end();
     }
 
-    pub fn draw(p: Path, buffer: *render.Buffer) !void {
+    pub fn draw(p: Path, buffer: anytype) !void {
         const style = p.getStyle();
         if (p.isLooped())
             try p.generate(buffer.generator(style.fill_color));
@@ -290,7 +289,7 @@ pub fn reversedIterator(image: *const Image) ReversedIterator {
     return .{ .image = image, .index = image.props.len, .offset = image.nodes.len };
 }
 
-pub fn draw(image: Image, buffer: *render.Buffer) !void {
+pub fn draw(image: Image, buffer: anytype) !void {
     var it = image.iterator();
     while (it.next()) |path|
         try path.draw(buffer);

@@ -12,7 +12,9 @@ const desired_frame_time = 10 * std.time.ns_per_ms;
 var window: platform.Window = undefined;
 
 var context: render.Context = undefined;
-var buffers: [3]render.Buffer = undefined;
+var bind_group_layout: *webgpu.BindGroupLayout = undefined;
+var pipeline: *webgpu.RenderPipeline = undefined;
+var buffers: [3]render.fragments.Buffer = undefined;
 
 var time: i128 = undefined;
 
@@ -22,8 +24,10 @@ fn init(allocator: std.mem.Allocator) !void {
     window.show();
 
     context = try render.Context.init(window);
+    bind_group_layout = render.fragments.createBindGroupLayout(context.device);
+    pipeline = render.fragments.createPipeline(context.device, bind_group_layout, render.Context.swapchain_format);
     for (buffers) |*buffer|
-        buffer.* = render.Buffer.init(&context, allocator);
+        buffer.* = render.fragments.Buffer.init(context.device, bind_group_layout, allocator);
 
     try editor.init(allocator);
     gui.init(context.device);
@@ -72,7 +76,7 @@ fn onFrame() !void {
         editor.should_update_transform = false;
     }
 
-    context.render(onRender);
+    render.renderToScreen(context, .{ 0.8, 0.8, 0.8, 1 }, draw);
 
     const frame_time = std.time.nanoTimestamp() - time;
     if (frame_time < desired_frame_time)
@@ -80,11 +84,12 @@ fn onFrame() !void {
     time = std.time.nanoTimestamp();
 }
 
-fn onRender(pass: *webgpu.RenderPassEncoder) void {
+fn draw(pass: *webgpu.RenderPassEncoder) void {
+    pass.setPipeline(pipeline);
     for (buffers) |buffer| {
-        buffer.render(pass);
+        buffer.draw(pass);
     }
-    gui.render(pass);
+    gui.draw(pass);
 }
 
 fn onEvent(event: platform.Event, _: platform.Window) !void {

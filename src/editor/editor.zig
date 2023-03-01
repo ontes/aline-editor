@@ -1,6 +1,5 @@
 const std = @import("std");
 const math = @import("math");
-const render = @import("render");
 
 const Image = @import("Image.zig");
 const ImageSelection = @import("ImageSelection.zig");
@@ -557,11 +556,11 @@ pub fn selectAll() !void {
 const select_color = [4]f32{ 0.9, 0.9, 0, 1 };
 const preview_color = [4]f32{ 0.9, 0, 0, 1 };
 
-pub fn drawImage(buffer: *render.Buffer) !void {
+pub fn drawImage(buffer: anytype) !void {
     try history.get().image.draw(buffer);
 }
 
-pub fn drawHelper(buffer: *render.Buffer) !void {
+pub fn drawHelper(buffer: anytype) !void {
     if (capture != null) {
         try operation.?.generateHelper(history.getPrev().*, buffer.generator(preview_color));
     } else {
@@ -569,7 +568,7 @@ pub fn drawHelper(buffer: *render.Buffer) !void {
     }
 }
 
-pub fn drawCanvas(buffer: *render.Buffer) !void {
+pub fn drawCanvas(buffer: anytype) !void {
     const rect = math.Rect{ .pos = .{ 0, 0 }, .radius = canvas_size / math.vec2.splat(2) };
     try rect.generate(buffer.generator(.{ canvas_color[0], canvas_color[1], canvas_color[2], 1 }));
 }

@@ -8,8 +8,6 @@ const linalg = @import("linalg.zig");
 
 const step_angle = std.math.pi / 32.0;
 
-const err = error.RendererError;
-
 const vs_source =
     \\  struct VertexOut {
     \\      @builtin(position) position: vec4<f32>,

@@ -465,7 +465,7 @@ pub fn isKeyboardCaptured() bool {
     return imgui.getIO().want_capture_keyboard;
 }
 
-pub fn render(pass: *webgpu.RenderPassEncoder) void {
+pub fn draw(pass: *webgpu.RenderPassEncoder) void {
     imgui_impl_wgpu.renderDrawData(imgui.getDrawData().?, pass);
 }
 
