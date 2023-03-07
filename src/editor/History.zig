@@ -17,6 +17,12 @@ pub fn deinit(history: History) void {
     history.entries.deinit();
 }
 
+pub fn clear(history: *History) void {
+    for (history.entries.items) |*is|
+        is.deinit();
+    history.entries.clearRetainingCapacity();
+}
+
 pub fn get(history: History) *ImageSelection {
     return &history.entries.items[history.entries.items.len - 1 - history.level];
 }

@@ -204,7 +204,10 @@ pub fn onFrame() !void {
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Position = editor.Capture.Position.init(&op.origin) };
 
-                _ = imgui.checkbox("lock aspect ratio", &op.lock_aspect);
+                if (imgui.checkbox("lock aspect ratio", &op.lock_aspect)) {
+                    op.scale[1] = op.scale[0];
+                    try editor.updateOperation();
+                }
 
                 if (op.lock_aspect) {
                     if (imgui.inputFloat("scale", &op.scale[0], 0, 0, null, .{})) {
@@ -374,7 +377,7 @@ pub fn onFrame() !void {
                     const file = try std.fs.openFileAbsoluteZ(path, .{});
                     defer file.close();
                     const image = try storage.readImage(file, editor.history.get().image.allocator);
-                    editor.history.entries.clearRetainingCapacity();
+                    editor.history.clear();
                     try editor.history.add(.{ .image = image });
                     editor.should_draw_image = true;
                     editor.should_draw_helper = true;
