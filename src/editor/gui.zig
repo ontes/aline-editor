@@ -7,7 +7,6 @@ const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 const nfd = @import("nfd");
 
 const editor = @import("editor.zig");
-const ImageSelection = @import("ImageSelection.zig");
 const storage = @import("storage.zig");
 const rendering = @import("rendering.zig");
 
@@ -228,7 +227,7 @@ pub fn onFrame() !void {
                     try editor.updateOperation();
             },
             .ChangeAngle => |*op| {
-                imgui.text("Change Angle");
+                imgui.text("Change Arc Angle");
 
                 var angle_deg = std.math.radiansToDegrees(f32, op.angle);
                 if (imgui.inputFloat("##angle", &angle_deg, 0, 0, null, .{})) {
@@ -286,6 +285,10 @@ pub fn onFrame() !void {
         if (editor.Operation.Rotate.init(editor.getIS())) |op_| {
             var op = op_;
             if (imgui.beginMenu("Rotate", true)) {
+                if (imgui.menuItem("Rotate...", "R", false, true)) {
+                    try editor.setOperation(.{ .Rotate = op });
+                    editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
+                }
                 if (imgui.menuItem("Rotate CW 90°", null, false, true)) {
                     op.angle = std.math.degreesToRadians(f32, -90);
                     try editor.setOperation(.{ .Rotate = op });
@@ -308,12 +311,16 @@ pub fn onFrame() !void {
         if (editor.Operation.Scale.init(editor.getIS())) |op_| {
             var op = op_;
             if (imgui.beginMenu("Scale", true)) {
-                if (imgui.menuItem("Flip horizontally", null, false, true)) {
+                if (imgui.menuItem("Scale...", "S", false, true)) {
+                    try editor.setOperation(.{ .Scale = op });
+                    editor.capture = .{ .Scale = editor.Capture.Scale.init(&editor.operation.?.Scale.scale, op.origin, op.lock_aspect) };
+                }
+                if (imgui.menuItem("Flip Horizontally", null, false, true)) {
                     op.lock_aspect = false;
                     op.scale[0] = -1;
                     try editor.setOperation(.{ .Scale = op });
                 }
-                if (imgui.menuItem("Flip vertically", null, false, true)) {
+                if (imgui.menuItem("Flip Vertically", null, false, true)) {
                     op.lock_aspect = false;
                     op.scale[1] = -1;
                     try editor.setOperation(.{ .Scale = op });
@@ -331,7 +338,7 @@ pub fn onFrame() !void {
             }
         }
         if (editor.Operation.ChangeAngle.init(editor.getIS())) |op| {
-            if (imgui.menuItem("Change ArcAngle", "D", false, true)) {
+            if (imgui.menuItem("Change Arc Angle", "D", false, true)) {
                 try editor.setOperation(.{ .ChangeAngle = op });
                 editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&editor.operation.?.ChangeAngle.angle, editor.operation.?.ChangeAngle._pos_a, editor.operation.?.ChangeAngle._pos_b) };
             }
@@ -339,19 +346,19 @@ pub fn onFrame() !void {
         if (editor.Operation.Order.init(editor.getIS())) |op_| {
             var op = op_;
             if (imgui.beginMenu("Order", true)) {
-                if (imgui.menuItem("Bring to front", "SHIFT+UP", false, true)) {
+                if (imgui.menuItem("Bring To Front", "SHIFT+UP", false, true)) {
                     op.offset = editor.Operation.Order.getLimit(editor.getIS());
                     try editor.setOperation(.{ .Order = op });
                 }
-                if (imgui.menuItem("Bring forward", "UP", false, true)) {
+                if (imgui.menuItem("Bring Forward", "UP", false, true)) {
                     op.offset = 1;
                     try editor.setOperation(.{ .Order = op });
                 }
-                if (imgui.menuItem("Send backward", "DOWN", false, true)) {
+                if (imgui.menuItem("Send Backward", "DOWN", false, true)) {
                     op.offset = -1;
                     try editor.setOperation(.{ .Order = op });
                 }
-                if (imgui.menuItem("Send to back", "SHIFT+DOWN", false, true)) {
+                if (imgui.menuItem("Send To Back", "SHIFT+DOWN", false, true)) {
                     op.offset = -editor.Operation.Order.getLimit(editor.getIS());
                     try editor.setOperation(.{ .Order = op });
                 }
@@ -374,29 +381,20 @@ pub fn onFrame() !void {
             if (imgui.menuItem("Open", null, false, true)) {
                 var path: [*:0]u8 = undefined;
                 if (nfd.openDialog(null, null, &path) == .okay) {
-                    const file = try std.fs.openFileAbsoluteZ(path, .{});
-                    defer file.close();
-                    const image = try storage.readImage(file, editor.history.get().image.allocator);
-                    editor.history.clear();
-                    try editor.history.add(.{ .image = image });
-                    editor.should_draw_image = true;
-                    editor.should_draw_helper = true;
-                    editor.should_draw_canvas = true;
+                    editor.loadFromFile(path) catch |err| std.debug.print("Opening failed: {}\n", .{err});
                 }
             }
             if (imgui.menuItem("Save", null, false, true)) {
                 var path: [*:0]u8 = undefined;
                 if (nfd.saveDialog(null, "image.bin", &path) == .okay) {
-                    const file = try std.fs.createFileAbsoluteZ(path, .{});
-                    defer file.close();
-                    try storage.writeImage(file, editor.history.get().image);
+                    editor.saveToFile(path) catch |err| std.debug.print("Saving failed: {}\n", .{err});
                 }
             }
             imgui.separator();
             if (imgui.menuItem("Export PNG", null, false, true)) {
                 var path: [*:0]u8 = undefined;
                 if (nfd.saveDialog(null, "image.png", &path) == .okay) {
-                    try rendering.renderToFile(path, editor.canvas_size, editor.canvas_color);
+                    editor.exportToFile(path) catch |err| std.debug.print("Exporting failed: {}\n", .{err});
                 }
             }
             imgui.separator();

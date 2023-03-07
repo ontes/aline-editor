@@ -1,6 +1,8 @@
 const std = @import("std");
 const Image = @import("Image.zig");
 
+const signature = [5]u8{ 'a', 'l', 'i', 'n', 'e' };
+
 fn toByteSlice(comptime Type: type, slice: []Type) []u8 {
     return @ptrCast([*]u8, slice.ptr)[0..(slice.len * @sizeOf(Type))];
 }
@@ -19,6 +21,7 @@ fn readAny(file: std.fs.File, data: anytype) !void {
 }
 
 pub fn writeImage(file: std.fs.File, image: Image) !void {
+    try writeAny(file, &signature);
     try writeAny(file, @as([]const usize, &.{image.props.len}));
     try writeAny(file, image.props.items(.node_count));
     try writeAny(file, image.props.items(.style));
@@ -29,6 +32,11 @@ pub fn writeImage(file: std.fs.File, image: Image) !void {
 }
 
 pub fn readImage(file: std.fs.File, allocator: std.mem.Allocator) !Image {
+    var signature_check: [5]u8 = undefined;
+    try readAny(file, &signature_check);
+    if (!std.mem.eql(u8, &signature, &signature_check))
+        return error.InvalidFileType;
+
     var image = Image.init(allocator);
 
     var props_len: [1]usize = undefined;

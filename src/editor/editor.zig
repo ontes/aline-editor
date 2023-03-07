@@ -6,6 +6,7 @@ const ImageSelection = @import("ImageSelection.zig");
 const History = @import("History.zig");
 const snapping = @import("snapping.zig");
 const rendering = @import("rendering.zig");
+const storage = @import("storage.zig");
 
 pub var history: History = undefined;
 pub var operation: ?Operation = null;
@@ -597,4 +598,25 @@ fn getStroke() math.Stroke {
 }
 fn getWideStroke() math.Stroke {
     return .{ .width = 4 * canvas_zoom, .cap = .round };
+}
+
+pub fn loadFromFile(path: [*:0]const u8) !void {
+    const file = try std.fs.openFileAbsoluteZ(path, .{});
+    defer file.close();
+    const image = try storage.readImage(file, history.get().image.allocator);
+    history.clear();
+    try history.add(.{ .image = image });
+    should_draw_image = true;
+    should_draw_helper = true;
+    should_draw_canvas = true;
+}
+
+pub fn saveToFile(path: [*:0]const u8) !void {
+    const file = try std.fs.createFileAbsoluteZ(path, .{});
+    defer file.close();
+    try storage.writeImage(file, history.get().image);
+}
+
+pub fn exportToFile(path: [*:0]const u8) !void {
+    try rendering.renderToFile(path, canvas_size, canvas_color);
 }
