@@ -274,7 +274,7 @@ pub fn generateSelected(is: ImageSelection, gen: anytype) !void {
         if (ps.isLooped()) {
             try ps.path.generate(gen);
         } else {
-            var pass = gen.begin();
+            var pass = try gen.begin();
             var node = ps.a;
             while (node != ps.b) : (node = ps.path.nextNode(node))
                 try pass.add(ps.path.getPos(node), ps.path.getAng(node));

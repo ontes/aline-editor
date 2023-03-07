@@ -228,7 +228,7 @@ pub const Generator = struct {
     buffer: *Buffer,
     color: [4]f32,
 
-    pub fn begin(g: Generator) Pass {
+    pub fn begin(g: Generator) !Pass {
         return .{ .g = g };
     }
 

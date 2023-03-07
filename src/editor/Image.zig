@@ -122,7 +122,7 @@ pub const Path = struct {
 
     pub fn generate(p: Path, gen: anytype) !void {
         std.debug.assert(p.offset != null);
-        var pass = gen.begin();
+        var pass = try gen.begin();
         var i: usize = 0;
         while (i < p.getNodeCount()) : (i += 1)
             try pass.add(p.getPos(i), p.getAng(i));
@@ -204,6 +204,13 @@ pub fn operationAddPoint(image: Image, pos: math.Vec2, style: Path.Style, name: 
     out.addImage(image) catch unreachable;
     out.addEmptyPath(style, name) catch unreachable;
     out.appendNode(.{ .position = pos }) catch unreachable;
+    return out;
+}
+
+/// Add new path containing rounded rect
+pub fn operationAddShape(image: Image, rect: math.RoundedRect, style: Path.Style, name: Path.Name) !Image {
+    var out = try image.clone();
+    try rect.generate(out.generator(style, name));
     return out;
 }
 
@@ -293,4 +300,29 @@ pub fn draw(image: Image, buffer: anytype) !void {
     var it = image.iterator();
     while (it.next()) |path|
         try path.draw(buffer);
+}
+
+const Generator = struct {
+    image: *Image,
+    style: Path.Style,
+    name: Path.Name,
+
+    pub fn begin(g: Generator) !Pass {
+        try g.image.addEmptyPath(g.style, g.name);
+        return .{ .g = g };
+    }
+
+    pub const Pass = struct {
+        g: Generator,
+
+        pub fn add(p: *Pass, pos: math.Vec2, angle: f32) !void {
+            try p.g.image.appendNode(.{ .position = pos, .angle = angle });
+        }
+
+        pub fn end(_: Pass) !void {}
+    };
+};
+
+pub fn generator(image: *Image, style: Path.Style, name: Path.Name) Generator {
+    return .{ .image = image, .style = style, .name = name };
 }

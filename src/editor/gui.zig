@@ -144,6 +144,34 @@ pub fn onFrame() !void {
                 if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
                     editor.capture = .{ .Position = editor.Capture.Position.init(&op.position) };
             },
+            .AddShape => |*op| {
+                imgui.text("Add Shape");
+
+                if (imgui.inputFloat2("center position", &op.rect.pos[0], null, .{}))
+                    try editor.updateOperation();
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.rect.pos) };
+
+                if (imgui.checkbox("lock aspect ratio", &op.lock_aspect)) {
+                    op.rect.radius[1] = op.rect.radius[0];
+                    try editor.updateOperation();
+                }
+
+                if (op.lock_aspect) {
+                    if (imgui.inputFloat("radius", &op.rect.radius[0], 0, 0, null, .{})) {
+                        op.rect.radius[1] = op.rect.radius[0];
+                        try editor.updateOperation();
+                    }
+                } else {
+                    if (imgui.inputFloat2("radius", &op.rect.radius[0], null, .{}))
+                        try editor.updateOperation();
+                }
+                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                    editor.capture = .{ .Scale = editor.Capture.Scale.init(&op.rect.radius, op.rect.pos, op.lock_aspect) };
+
+                if (imgui.inputFloat("corner radius", &op.rect.corner_radius, 0, 0, null, .{}))
+                    try editor.updateOperation();
+            },
             .Append => |*op| {
                 imgui.text("Append");
 
@@ -263,6 +291,37 @@ pub fn onFrame() !void {
             if (imgui.menuItem("Add Point", "A", false, true)) {
                 try editor.setOperation(.{ .AddPoint = op });
                 editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.AddPoint.position) };
+            }
+        }
+        if (editor.Operation.AddShape.init(editor.getIS())) |op_| {
+            var op = op_;
+            if (imgui.beginMenu("Add Shape", true)) {
+                if (imgui.menuItem("Add Square", null, false, true)) {
+                    op.lock_aspect = true;
+                    try editor.setOperation(.{ .AddShape = op });
+                    editor.capture = .{ .Shape = editor.Capture.Shape.init(&editor.operation.?.AddShape.rect.pos, &editor.operation.?.AddShape.rect.radius, op.lock_aspect) };
+                }
+                if (imgui.menuItem("Add Rect", null, false, true)) {
+                    try editor.setOperation(.{ .AddShape = op });
+                    editor.capture = .{ .Shape = editor.Capture.Shape.init(&editor.operation.?.AddShape.rect.pos, &editor.operation.?.AddShape.rect.radius, op.lock_aspect) };
+                }
+                if (imgui.menuItem("Add Circle", null, false, true)) {
+                    op.rect.corner_radius = std.math.inf_f32;
+                    op.lock_aspect = true;
+                    try editor.setOperation(.{ .AddShape = op });
+                    editor.capture = .{ .Shape = editor.Capture.Shape.init(&editor.operation.?.AddShape.rect.pos, &editor.operation.?.AddShape.rect.radius, op.lock_aspect) };
+                }
+                if (imgui.menuItem("Add Stadium", null, false, true)) {
+                    op.rect.corner_radius = std.math.inf_f32;
+                    try editor.setOperation(.{ .AddShape = op });
+                    editor.capture = .{ .Shape = editor.Capture.Shape.init(&editor.operation.?.AddShape.rect.pos, &editor.operation.?.AddShape.rect.radius, op.lock_aspect) };
+                }
+                if (imgui.menuItem("Add Rounded Rect", null, false, true)) {
+                    op.rect.corner_radius = editor.default_corner_radius;
+                    try editor.setOperation(.{ .AddShape = op });
+                    editor.capture = .{ .Shape = editor.Capture.Shape.init(&editor.operation.?.AddShape.rect.pos, &editor.operation.?.AddShape.rect.radius, op.lock_aspect) };
+                }
+                imgui.endMenu();
             }
         }
         if (editor.Operation.Append.init(editor.getIS())) |op| {

@@ -30,11 +30,13 @@ pub var default_style = Image.Path.Style{
     .fill_color = .{ 0.5, 0.5, 0.5, 1 },
     .stroke_color = .{ 0, 0, 0, 1 },
 };
+pub var default_corner_radius: f32 = 16;
 
 pub const Operation = union(enum) {
     Rename: Rename,
     ChangeStyle: ChangeStyle,
     AddPoint: AddPoint,
+    AddShape: AddShape,
     Append: Append,
     Connect: Connect,
     Move: Move,
@@ -112,29 +114,62 @@ pub const Operation = union(enum) {
     };
 
     pub const AddPoint = struct {
-        position: math.Vec2 = .{ 0, 0 },
+        position: math.Vec2 = .{ std.math.nan_f32, std.math.nan_f32 },
         style: Image.Path.Style,
         name: Image.Path.Name,
-
-        fn getDefaultName(index: usize) Image.Path.Name {
-            return .{ 'P', 'a', 't', 'h', ' ', '0' + @intCast(u8, (index / 10) % 10), '0' + @intCast(u8, index % 10) } ++ .{0} ** 25;
-        }
 
         pub fn init(is: ImageSelection) ?AddPoint {
             if (is.len() != 0) return null;
             return .{ .style = default_style, .name = getDefaultName(is.image.len()) };
         }
 
+        fn isNan(op: AddPoint) bool {
+            return std.math.isNan(op.position[0]) or std.math.isNan(op.position[1]);
+        }
+
         pub fn apply(op: AddPoint, is: ImageSelection) !ImageSelection {
+            if (op.isNan()) return is.clone();
             var out = ImageSelection{ .image = try is.image.operationAddPoint(op.position, op.style, op.name) };
             try out.selectNode(out.image.len() - 1, 0);
             return out;
         }
 
         pub fn generateHelper(op: AddPoint, _: ImageSelection, gen: anytype) !void {
-            var pass = getWideStroke().generator(gen).begin();
+            if (op.isNan()) return;
+            var pass = try getWideStroke().generator(gen).begin();
             try pass.add(op.position, std.math.nan_f32);
             try pass.end();
+        }
+    };
+
+    pub const AddShape = struct {
+        rect: math.RoundedRect = .{
+            .pos = .{ std.math.nan_f32, std.math.nan_f32 },
+            .radius = .{ 0, 0 },
+            .corner_radius = 0,
+        },
+        style: Image.Path.Style,
+        name: Image.Path.Name,
+        lock_aspect: bool = false,
+
+        pub fn init(is: ImageSelection) ?AddShape {
+            if (is.len() != 0) return null;
+            return .{ .style = default_style, .name = getDefaultName(is.image.len()) };
+        }
+
+        fn isNan(op: AddShape) bool {
+            return std.math.isNan(op.rect.pos[0]) or std.math.isNan(op.rect.pos[1]) or op.rect.radius[0] == 0 or op.rect.radius[1] == 0;
+        }
+
+        pub fn apply(op: AddShape, is: ImageSelection) !ImageSelection {
+            if (op.isNan()) return is.clone();
+            var out = ImageSelection{ .image = try is.image.operationAddShape(op.rect, op.style, op.name) };
+            return out;
+        }
+
+        pub fn generateHelper(op: AddShape, _: ImageSelection, gen: anytype) !void {
+            if (op.isNan()) return;
+            try op.rect.generate(getStroke().generator(gen));
         }
     };
 
@@ -251,7 +286,7 @@ pub const Operation = union(enum) {
         pub fn generateHelper(op: Rotate, is: ImageSelection, gen: anytype) !void {
             try is.generateSelected(math.transformGenerator(op.getMat(), getWideStroke().generator(gen)));
             try is.generateTransformEdges(op.getMat(), getStroke().generator(gen));
-            var pass = getWideStroke().generator(gen).begin();
+            var pass = try getWideStroke().generator(gen).begin();
             try pass.add(op.origin, std.math.nan_f32);
             try pass.end();
         }
@@ -280,7 +315,7 @@ pub const Operation = union(enum) {
         pub fn generateHelper(op: Scale, is: ImageSelection, gen: anytype) !void {
             try is.generateSelected(math.transformGenerator(op.getMat(), getWideStroke().generator(gen)));
             try is.generateTransformEdges(op.getMat(), getStroke().generator(gen));
-            var pass = getWideStroke().generator(gen).begin();
+            var pass = try getWideStroke().generator(gen).begin();
             try pass.add(op.origin, std.math.nan_f32);
             try pass.end();
         }
@@ -420,6 +455,7 @@ pub const Capture = union(enum) {
     Angle: Angle,
     Scale: Scale,
     ArcAngle: ArcAngle,
+    Shape: Shape,
 
     pub fn cancel(any_capture: Capture) void {
         return switch (any_capture) {
@@ -489,6 +525,22 @@ pub const Capture = union(enum) {
         }
         pub fn cancel(cap: ArcAngle) void {
             cap.angle.* = cap._angle;
+        }
+    };
+
+    pub const Shape = struct {
+        pos: *math.Vec2,
+        _pos: math.Vec2,
+        radius: *math.Vec2,
+        _radius: math.Vec2,
+        _lock_aspect: bool,
+
+        pub fn init(pos: *math.Vec2, radius: *math.Vec2, lock_aspect: bool) Shape {
+            return .{ .pos = pos, ._pos = pos.*, .radius = radius, ._radius = radius.*, ._lock_aspect = lock_aspect };
+        }
+        pub fn cancel(cap: Shape) void {
+            cap.pos.* = cap._pos;
+            cap.radius.* = cap._radius;
         }
     };
 };
@@ -598,6 +650,10 @@ fn getStroke() math.Stroke {
 }
 fn getWideStroke() math.Stroke {
     return .{ .width = 4 * canvas_zoom, .cap = .round };
+}
+
+fn getDefaultName(index: usize) Image.Path.Name {
+    return .{ 'P', 'a', 't', 'h', ' ', '0' + @intCast(u8, (index / 10) % 10), '0' + @intCast(u8, index % 10) } ++ .{0} ** 25;
 }
 
 pub fn loadFromFile(path: [*:0]const u8) !void {

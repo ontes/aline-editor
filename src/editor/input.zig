@@ -25,10 +25,7 @@ pub fn onEvent(event: platform.Event) !void {
             editor.should_draw_helper = true;
         },
         .key_press => |key| switch (key) {
-            .mouse_left => if (editor.capture) |_| {
-                editor.capture = null;
-                try editor.updateOperation();
-            } else if (!gui.isMouseCaptured()) {
+            .mouse_left => if (!gui.isMouseCaptured()) {
                 mouse_click_pos = mouse_pos;
             },
             .mouse_right => if (editor.capture) |capture| {
@@ -45,15 +42,18 @@ pub fn onEvent(event: platform.Event) !void {
             },
         },
         .key_release => |key| switch (key) {
-            .mouse_left => if (mouse_click_pos != null) {
-                if (editor.capture == null and !gui.isMouseCaptured()) {
+            .mouse_left => if (mouse_click_pos) |click_poss| {
+                if (editor.capture) |_| {
+                    editor.capture = null;
+                    try editor.updateOperation();
+                } else {
                     try editor.finishOperation();
                     if (!shift_pressed)
                         editor.history.get().deselectAll();
-                    if (snapping.shouldSnapToPoint(mouse_pos, mouse_click_pos.?, editor.getSnapDist())) {
-                        try selectPoint(mouse_click_pos.?);
+                    if (snapping.shouldSnapToPoint(mouse_pos, click_poss, editor.getSnapDist())) {
+                        try selectPoint(click_poss);
                     } else {
-                        try selectRect(@min(mouse_pos, mouse_click_pos.?), @max(mouse_pos, mouse_click_pos.?));
+                        try selectRect(@min(mouse_pos, click_poss), @max(mouse_pos, click_poss));
                     }
                     editor.should_draw_helper = true;
                 }
@@ -77,32 +77,38 @@ pub fn onEvent(event: platform.Event) !void {
                 mouse_pos = prev_mouse_pos;
             }
 
-            if (editor.capture) |any_capture| switch (any_capture) {
-                .Position => |capture| {
-                    capture.pos.* = mouse_pos;
-                    try editor.updateOperation();
-                },
-                .Offset => |capture| {
-                    capture.offset.* += (mouse_pos - prev_mouse_pos) * math.vec2.splat(if (shift_pressed) 0.1 else 1);
-                    try editor.updateOperation();
-                },
-                .Angle => |capture| {
-                    const vec = mouse_pos - capture._origin;
-                    const prev_vec = prev_mouse_pos - capture._origin;
-                    capture.angle.* += std.math.atan2(f32, math.vec2.dot(vec, math.normal(prev_vec)), math.vec2.dot(vec, prev_vec)) * @as(f32, if (shift_pressed) 0.1 else 1);
-                    try editor.updateOperation();
-                },
-                .Scale => |capture| {
-                    const vec = mouse_pos - capture._origin;
-                    const prev_vec = prev_mouse_pos - capture._origin;
-                    capture.scale.* *= if (capture._lock_aspect) math.vec2.splat(math.vec2.abs(vec) / math.vec2.abs(prev_vec)) else @fabs(vec / prev_vec);
-                    try editor.updateOperation();
-                },
-                .ArcAngle => |capture| {
-                    capture.angle.* = math.Arc.angleOnPoint(.{ .pos_a = capture._pos_a, .pos_b = capture._pos_b }, mouse_pos);
-                    try editor.updateOperation();
-                },
-            };
+            if (editor.capture) |any_capture| {
+                switch (any_capture) {
+                    .Position => |capture| {
+                        capture.pos.* = mouse_pos;
+                    },
+                    .Offset => |capture| {
+                        capture.offset.* += (mouse_pos - prev_mouse_pos) * math.vec2.splat(if (shift_pressed) 0.1 else 1);
+                    },
+                    .Angle => |capture| {
+                        const vec = mouse_pos - capture._origin;
+                        const prev_vec = prev_mouse_pos - capture._origin;
+                        capture.angle.* += std.math.atan2(f32, math.vec2.dot(vec, math.normal(prev_vec)), math.vec2.dot(vec, prev_vec)) * @as(f32, if (shift_pressed) 0.1 else 1);
+                    },
+                    .Scale => |capture| {
+                        const vec = mouse_pos - capture._origin;
+                        const prev_vec = prev_mouse_pos - capture._origin;
+                        capture.scale.* *= if (capture._lock_aspect) math.vec2.splat(math.vec2.abs(vec) / math.vec2.abs(prev_vec)) else @fabs(vec / prev_vec);
+                    },
+                    .ArcAngle => |capture| {
+                        capture.angle.* = math.Arc.angleOnPoint(.{ .pos_a = capture._pos_a, .pos_b = capture._pos_b }, mouse_pos);
+                    },
+                    .Shape => |capture| {
+                        if (mouse_click_pos) |click_pos| {
+                            capture.pos.* = click_pos;
+                            capture.radius.* = if (capture._lock_aspect) math.vec2.splat(@reduce(.Min, @fabs(click_pos - mouse_pos))) else @fabs(click_pos - mouse_pos);
+                        } else {
+                            capture.pos.* = mouse_pos;
+                        }
+                    },
+                }
+                try editor.updateOperation();
+            }
         },
         .mouse_scroll => |offset| {
             editor.canvas_zoom *= std.math.pow(f32, 0.8, @intToFloat(f32, offset));

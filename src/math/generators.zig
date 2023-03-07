@@ -25,7 +25,7 @@ pub fn StrokeGenerator(comptime Child: type) type {
 
         const Generator = @This();
 
-        pub fn begin(g: Generator) Pass {
+        pub fn begin(g: Generator) !Pass {
             return .{ .g = g };
         }
 
@@ -95,21 +95,21 @@ pub fn StrokeGenerator(comptime Child: type) type {
             switch (g.stroke.cap) {
                 .none => {},
                 .round => {
-                    var pass = g.child.begin();
+                    var pass = try g.child.begin();
                     try pass.add(pos + normal_a, geometry.Arc.angleOnPoint(.{ .pos_a = normal_a, .pos_b = normal_b }, sdir));
                     try pass.add(pos + normal_b, 0);
                     try pass.add(pos, 0);
                     try pass.end();
                 },
                 .bevel => {
-                    var pass = g.child.begin();
+                    var pass = try g.child.begin();
                     try pass.add(pos + normal_a, 0);
                     try pass.add(pos + normal_b, 0);
                     try pass.add(pos, 0);
                     try pass.end();
                 },
                 .miter => {
-                    var pass = g.child.begin();
+                    var pass = try g.child.begin();
                     try pass.add(pos + normal_a, 0);
                     const tip_dist = (normal_a[0] * dir_a[1] - normal_a[1] * dir_a[0]) / (sdir[0] * dir_a[1] - sdir[1] * dir_a[0]);
                     if (tip_dist > 0 and tip_dist < 4) {
@@ -129,7 +129,7 @@ pub fn StrokeGenerator(comptime Child: type) type {
             const normal_a = linalg.vec2.normalize(geometry.normal(arc.dirA())) * linalg.vec2.splat(g.stroke.width);
             const normal_b = linalg.vec2.normalize(geometry.normal(arc.dirB())) * linalg.vec2.splat(g.stroke.width);
 
-            var pass = g.child.begin();
+            var pass = try g.child.begin();
             try pass.add(arc.pos_a - normal_a, 0);
             try pass.add(arc.pos_a + normal_a, arc.angle);
             try pass.add(arc.pos_b - normal_b, 0);
@@ -147,8 +147,8 @@ pub fn TransformGenerator(comptime Child: type) type {
 
         const Generator = @This();
 
-        pub fn begin(g: Generator) Pass {
-            return .{ .g = g, .child_pass = g.child.begin() };
+        pub fn begin(g: Generator) !Pass {
+            return .{ .g = g, .child_pass = try g.child.begin() };
         }
 
         pub const Pass = struct {
@@ -173,7 +173,7 @@ pub const PointInsideGenerator = struct {
     point_pos: linalg.Vec2,
     inside: *bool,
 
-    pub fn begin(g: PointInsideGenerator) Pass {
+    pub fn begin(g: PointInsideGenerator) !Pass {
         return .{ .g = g };
     }
 
@@ -218,7 +218,7 @@ pub const BoundingBoxGenerator = struct {
     min_pos: *linalg.Vec2,
     max_pos: *linalg.Vec2,
 
-    pub fn begin(g: BoundingBoxGenerator) Pass {
+    pub fn begin(g: BoundingBoxGenerator) !Pass {
         return .{ .g = g };
     }
 
@@ -261,7 +261,7 @@ pub const PointSumGenerator = struct {
     sum: *linalg.Vec2,
     count: *usize,
 
-    pub fn begin(g: PointSumGenerator) Pass {
+    pub fn begin(g: PointSumGenerator) !Pass {
         return .{ .g = g };
     }
 
