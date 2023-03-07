@@ -22,7 +22,6 @@ pub fn onEvent(event: platform.Event) !void {
                 @intToFloat(f32, size[0]),
                 @intToFloat(f32, size[1]),
             };
-            editor.should_update_transform = true;
             editor.should_draw_helper = true;
         },
         .key_press => |key| switch (key) {
@@ -76,7 +75,6 @@ pub fn onEvent(event: platform.Event) !void {
             if (mouse_middle_pressed) {
                 editor.canvas_pan -= mouse_pos - prev_mouse_pos;
                 mouse_pos = prev_mouse_pos;
-                editor.should_update_transform = true;
             }
 
             if (editor.capture) |any_capture| switch (any_capture) {
@@ -108,7 +106,6 @@ pub fn onEvent(event: platform.Event) !void {
         },
         .mouse_scroll => |offset| {
             editor.canvas_zoom *= std.math.pow(f32, 0.8, @intToFloat(f32, offset));
-            editor.should_update_transform = true;
             editor.should_draw_helper = true;
         },
         .window_close => editor.should_run = false,

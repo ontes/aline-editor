@@ -7,8 +7,9 @@ const imgui_impl_wgpu = @import("imgui_impl_wgpu");
 const nfd = @import("nfd");
 
 const editor = @import("editor.zig");
-const storage = @import("storage.zig");
 const ImageSelection = @import("ImageSelection.zig");
+const storage = @import("storage.zig");
+const rendering = @import("rendering.zig");
 
 var last_time: u128 = 0;
 var preferences_open: bool = false;
@@ -382,10 +383,17 @@ pub fn onFrame() !void {
             }
             if (imgui.menuItem("Save", null, false, true)) {
                 var path: [*:0]u8 = undefined;
-                if (nfd.saveDialog(null, null, &path) == .okay) {
+                if (nfd.saveDialog(null, "image.bin", &path) == .okay) {
                     const file = try std.fs.createFileAbsoluteZ(path, .{});
                     defer file.close();
                     try storage.writeImage(file, editor.history.get().image);
+                }
+            }
+            imgui.separator();
+            if (imgui.menuItem("Export PNG", null, false, true)) {
+                var path: [*:0]u8 = undefined;
+                if (nfd.saveDialog(null, "image.png", &path) == .okay) {
+                    try rendering.renderToFile(path, editor.canvas_size, editor.canvas_color);
                 }
             }
             imgui.separator();
@@ -425,8 +433,12 @@ pub fn onFrame() !void {
         if (imgui.begin("Preferences", &preferences_open, .{})) {
             if (imgui.colorEdit4("canvas color", &editor.canvas_color, .{}))
                 editor.should_draw_canvas = true;
-            if (imgui.inputFloat2("canvas size", &editor.canvas_size[0], null, .{}))
+            var canvas_size_c_int = [2]c_int{ @intCast(c_int, editor.canvas_size[0]), @intCast(c_int, editor.canvas_size[1]) };
+            if (imgui.inputInt2("canvas size", &canvas_size_c_int, .{})) {
+                editor.canvas_size[0] = @intCast(u32, @max(0, canvas_size_c_int[0]));
+                editor.canvas_size[1] = @intCast(u32, @max(0, canvas_size_c_int[1]));
                 editor.should_draw_canvas = true;
+            }
 
             imgui.separator();
 

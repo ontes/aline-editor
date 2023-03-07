@@ -2,6 +2,7 @@ const std = @import("std");
 const imgui_build = @import("lib/imgui/build.zig");
 const dawn_build = @import("lib/dawn/build.zig");
 const nativefiledialogs_build = @import("lib/nativefiledialogs/build.zig");
+const stb_build = @import("lib/stb/build.zig");
 
 const webgpu_pkg = std.build.Pkg{
     .name = "webgpu",
@@ -32,6 +33,10 @@ const imgui_impl_wgpu_pkg = std.build.Pkg{
 const nfd_pkg = std.build.Pkg{
     .name = "nfd",
     .source = .{ .path = "lib/nativefiledialogs/nfd.zig" },
+};
+const stb_pkg = std.build.Pkg{
+    .name = "stb",
+    .source = .{ .path = "lib/stb/stb.zig" },
 };
 
 pub fn build(b: *std.build.Builder) !void {
@@ -77,6 +82,13 @@ pub fn build(b: *std.build.Builder) !void {
     nativefiledialogs_build.link(nfd_lib, "lib/nativefiledialogs/");
     exe.linkLibrary(nfd_lib);
     exe.addPackage(nfd_pkg);
+
+    const stb_lib = b.addStaticLibrary("stb", null);
+    stb_lib.setTarget(target);
+    stb_lib.setBuildMode(mode);
+    stb_build.link(stb_lib, "lib/stb/");
+    exe.linkLibrary(stb_lib);
+    exe.addPackage(stb_pkg);
 
     // platform
     switch (target.os_tag orelse @import("builtin").target.os.tag) {

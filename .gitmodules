@@ -7,3 +7,6 @@
 [submodule "lib/nativefiledialogs/nativefiledialogs"]
 	path = lib/nativefiledialogs/nativefiledialogs
 	url = https://github.com/mlabbe/nativefiledialog.git
+[submodule "lib/stb/stb"]
+	path = lib/stb/stb
+	url = https://github.com/nothings/stb.git

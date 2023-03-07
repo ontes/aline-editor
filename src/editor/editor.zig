@@ -5,6 +5,7 @@ const Image = @import("Image.zig");
 const ImageSelection = @import("ImageSelection.zig");
 const History = @import("History.zig");
 const snapping = @import("snapping.zig");
+const rendering = @import("rendering.zig");
 
 pub var history: History = undefined;
 pub var operation: ?Operation = null;
@@ -16,12 +17,11 @@ pub var live_preview = true;
 pub var should_draw_canvas = true;
 pub var should_draw_image = true;
 pub var should_draw_helper = true;
-pub var should_update_transform = true;
 
 pub var window_size: math.Vec2 = .{ 0, 0 };
 pub var canvas_pan: math.Vec2 = .{ 0, 0 };
 pub var canvas_zoom: f32 = 1;
-pub var canvas_size = math.Vec2{ 512, 512 };
+pub var canvas_size = [2]u32{ 512, 512 };
 pub var canvas_color = [4]f32{ 1, 1, 1, 1 };
 
 pub var default_style = Image.Path.Style{
@@ -556,24 +556,34 @@ pub fn selectAll() !void {
 const select_color = [4]f32{ 0.9, 0.9, 0, 1 };
 const preview_color = [4]f32{ 0.9, 0, 0, 1 };
 
-pub fn drawImage(buffer: anytype) !void {
-    try history.get().image.draw(buffer);
-}
-
-pub fn drawHelper(buffer: anytype) !void {
-    if (capture != null) {
-        try operation.?.generateHelper(history.getPrev().*, buffer.generator(preview_color));
-    } else {
-        try history.get().generateSelected(getWideStroke().generator(buffer.generator(select_color)));
+pub fn onFrame() !void {
+    if (should_draw_canvas) {
+        rendering.canvas_buffer.clear();
+        const rect = math.Rect{ .pos = .{ 0, 0 }, .radius = .{ @intToFloat(f32, canvas_size[0]) / 2, @intToFloat(f32, canvas_size[1]) / 2 } };
+        try rect.generate(rendering.canvas_buffer.generator(.{ canvas_color[0], canvas_color[1], canvas_color[2], 1 }));
+        rendering.canvas_buffer.flush();
+        should_draw_canvas = false;
     }
+    if (should_draw_image) {
+        rendering.image_buffer.clear();
+        try history.get().image.draw(&rendering.image_buffer);
+        rendering.image_buffer.flush();
+        should_draw_image = false;
+    }
+    if (should_draw_helper) {
+        rendering.helper_buffer.clear();
+        if (capture != null) {
+            try operation.?.generateHelper(history.getPrev().*, rendering.helper_buffer.generator(preview_color));
+        } else {
+            try history.get().generateSelected(getWideStroke().generator(rendering.helper_buffer.generator(select_color)));
+        }
+        rendering.helper_buffer.flush();
+        should_draw_helper = false;
+    }
+    rendering.setTransform(getTransform());
 }
 
-pub fn drawCanvas(buffer: anytype) !void {
-    const rect = math.Rect{ .pos = .{ 0, 0 }, .radius = canvas_size / math.vec2.splat(2) };
-    try rect.generate(buffer.generator(.{ canvas_color[0], canvas_color[1], canvas_color[2], 1 }));
-}
-
-pub fn getTransform() math.Mat3 {
+fn getTransform() math.Mat3 {
     const scale = math.vec2.splat(2 / canvas_zoom) / window_size;
     return math.mat3.mult(math.mat3.scale(.{ scale[0], scale[1], 1 }), math.mat3.translate(-canvas_pan));
 }
