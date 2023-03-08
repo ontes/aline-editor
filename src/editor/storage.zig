@@ -20,37 +20,47 @@ fn readAny(file: std.fs.File, data: anytype) !void {
         return error.EndOfFile;
 }
 
-pub fn writeImage(file: std.fs.File, image: Image) !void {
+const ImageInfo = struct {
+    image: Image,
+    canvas_size: [2]u32,
+    canvas_color: [4]f32,
+};
+
+pub fn writeImage(file: std.fs.File, ii: ImageInfo) !void {
     try writeAny(file, &signature);
-    try writeAny(file, @as([]const usize, &.{image.props.len}));
-    try writeAny(file, image.props.items(.node_count));
-    try writeAny(file, image.props.items(.style));
-    try writeAny(file, image.props.items(.name));
-    try writeAny(file, @as([]const usize, &.{image.nodes.len}));
-    try writeAny(file, image.nodes.items(.position));
-    try writeAny(file, image.nodes.items(.angle));
+    try writeAny(file, &ii.canvas_size);
+    try writeAny(file, &ii.canvas_color);
+    try writeAny(file, @as([]const usize, &.{ii.image.props.len}));
+    try writeAny(file, ii.image.props.items(.node_count));
+    try writeAny(file, ii.image.props.items(.style));
+    try writeAny(file, ii.image.props.items(.name));
+    try writeAny(file, @as([]const usize, &.{ii.image.nodes.len}));
+    try writeAny(file, ii.image.nodes.items(.position));
+    try writeAny(file, ii.image.nodes.items(.angle));
 }
 
-pub fn readImage(file: std.fs.File, allocator: std.mem.Allocator) !Image {
+pub fn readImage(file: std.fs.File, allocator: std.mem.Allocator) !ImageInfo {
     var signature_check: [5]u8 = undefined;
     try readAny(file, &signature_check);
     if (!std.mem.eql(u8, &signature, &signature_check))
         return error.InvalidFileType;
 
-    var image = Image.init(allocator);
+    var ii = ImageInfo{ .image = Image.init(allocator), .canvas_size = undefined, .canvas_color = undefined };
+    try readAny(file, &ii.canvas_size);
+    try readAny(file, &ii.canvas_color);
 
     var props_len: [1]usize = undefined;
     try readAny(file, @as([]usize, &props_len));
-    try image.props.resize(allocator, props_len[0]);
-    try readAny(file, image.props.items(.node_count));
-    try readAny(file, image.props.items(.style));
-    try readAny(file, image.props.items(.name));
+    try ii.image.props.resize(allocator, props_len[0]);
+    try readAny(file, ii.image.props.items(.node_count));
+    try readAny(file, ii.image.props.items(.style));
+    try readAny(file, ii.image.props.items(.name));
 
     var nodes_len: [1]usize = undefined;
     try readAny(file, @as([]usize, &nodes_len));
-    try image.nodes.resize(allocator, nodes_len[0]);
-    try readAny(file, image.nodes.items(.position));
-    try readAny(file, image.nodes.items(.angle));
+    try ii.image.nodes.resize(allocator, nodes_len[0]);
+    try readAny(file, ii.image.nodes.items(.position));
+    try readAny(file, ii.image.nodes.items(.angle));
 
-    return image;
+    return ii;
 }
