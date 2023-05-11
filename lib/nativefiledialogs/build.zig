@@ -5,13 +5,15 @@ pub fn linkDependencies(step: *std.build.LibExeObjStep) void {
     switch (step.target.os_tag orelse @import("builtin").target.os.tag) {
         .windows => {
             step.linkLibCpp();
-            step.linkSystemLibrary("comctl32");
+            step.linkSystemLibrary("ole32");
+            step.linkSystemLibrary("uuid");
         },
         .linux => {
             step.linkSystemLibrary("gtk-3");
             step.linkSystemLibrary("gdk-3");
         },
         .macos => {
+            step.linkFramework("Foundation");
             step.linkFramework("AppKit");
         },
         else => unreachable,
