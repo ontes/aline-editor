@@ -1,7 +1,7 @@
 const std = @import("std");
 const imgui_build = @import("lib/imgui/build.zig");
 const dawn_build = @import("lib/dawn/build.zig");
-const nativefiledialogs_build = @import("lib/nativefiledialogs/build.zig");
+const nativefiledialogs_build = @import("lib/nativefiledialog/build.zig");
 const stb_build = @import("lib/stb/build.zig");
 
 const webgpu_pkg = std.build.Pkg{
@@ -32,7 +32,7 @@ const imgui_impl_wgpu_pkg = std.build.Pkg{
 };
 const nfd_pkg = std.build.Pkg{
     .name = "nfd",
-    .source = .{ .path = "lib/nativefiledialogs/nfd.zig" },
+    .source = .{ .path = "lib/nativefiledialog/nfd.zig" },
 };
 const stb_pkg = std.build.Pkg{
     .name = "stb",
@@ -75,11 +75,11 @@ pub fn build(b: *std.build.Builder) !void {
     exe.addPackage(imgui_pkg);
     exe.addPackage(imgui_impl_wgpu_pkg);
 
-    // nativefiledialogs
+    // nativefiledialog
     const nfd_lib = b.addStaticLibrary("nfd", null);
     nfd_lib.setTarget(target);
     nfd_lib.setBuildMode(mode);
-    nativefiledialogs_build.link(nfd_lib, "lib/nativefiledialogs/");
+    nativefiledialogs_build.link(nfd_lib, "lib/nativefiledialog/");
     exe.linkLibrary(nfd_lib);
     exe.addPackage(nfd_pkg);
 

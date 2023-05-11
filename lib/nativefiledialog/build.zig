@@ -23,7 +23,7 @@ pub fn linkDependencies(step: *std.build.LibExeObjStep) void {
 pub fn link(step: *std.build.LibExeObjStep, comptime path: []const u8) void {
     linkDependencies(step);
 
-    const src_path = path ++ "nativefiledialogs/src/";
+    const src_path = path ++ "nativefiledialog/src/";
 
     step.addIncludePath(src_path ++ "include");
     step.addCSourceFile(src_path ++ "nfd_common.c", &.{});
