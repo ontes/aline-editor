@@ -96,6 +96,12 @@ pub fn pollEvents(comptime callback: fn (event: common.Event, window: Window) an
                     if (keycodeToKey(msg.w_param)) |key|
                         try callback(.{ .key_press = key }, msg.window);
                 }
+                var key_state: [256]u8 = undefined;
+                _ = win32.getKeyboardState(&key_state);
+                var char: u16 = undefined;
+                if (win32.toAscii(@intCast(c_uint, msg.w_param), @truncate(u8, @bitCast(usize, msg.l_param) >> 16), &key_state, &char, 0) > 0) {
+                    try callback(.{ .text_input = &.{@truncate(u8, char)} }, msg.window);
+                }
             },
             .key_up, .sys_key_up => {
                 if (keycodeToKey(msg.w_param)) |key|
