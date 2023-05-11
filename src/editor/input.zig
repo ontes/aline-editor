@@ -42,11 +42,11 @@ pub fn onEvent(event: platform.Event) !void {
             },
         },
         .key_release => |key| switch (key) {
-            .mouse_left => if (mouse_click_pos) |click_poss| {
+            .mouse_left => {
                 if (editor.capture) |_| {
                     editor.capture = null;
                     try editor.updateOperation();
-                } else {
+                } else if (mouse_click_pos) |click_poss| {
                     try editor.finishOperation();
                     if (!shift_pressed)
                         editor.history.get().deselectAll();

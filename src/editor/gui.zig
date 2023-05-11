@@ -38,13 +38,13 @@ pub fn onFrame() !void {
     imgui_impl_wgpu.newFrame();
     imgui.newFrame();
 
-    imgui.setNextWindowPos(.{ .x = 64, .y = 64 }, .once, .{ .x = 0, .y = 0 });
+    imgui.setNextWindowPos(.{ .x = 64, .y = 64 }, .once, .{});
     imgui.setNextWindowSize(.{ .x = 256, .y = 256 }, .once);
     if (imgui.begin("Paths", null, .{}) and imgui.beginListBox("path list box", .{ .x = -1, .y = -1 })) {
         const is = editor.history.get();
         for (is.image.props.items(.name)) |name, index| {
             imgui.pushIDInt(@intCast(c_int, index));
-            if (imgui.selectable(@ptrCast([*:0]const u8, &name), is.isPathPartiallySelected(index), .{}, .{ .x = 0, .y = 0 }) or
+            if (imgui.selectable(@ptrCast([*:0]const u8, &name), is.isPathPartiallySelected(index), .{}, .{}) or
                 (imgui.isItemHovered(.{ .allow_when_blocked_by_popup = true }) and imgui.isMouseClicked(.right, false) and !is.isPathSelected(index)))
             {
                 try editor.finishOperation();
@@ -82,7 +82,7 @@ pub fn onFrame() !void {
     imgui.end();
 
     if (editor.operation) |*any_operation| {
-        imgui.setNextWindowPos(.{ .x = 64, .y = 384 }, .once, .{ .x = 0, .y = 0 });
+        imgui.setNextWindowPos(.{ .x = 64, .y = 384 }, .once, .{});
         imgui.setNextWindowSize(.{ .x = 256, .y = 256 }, .once);
         var open = true;
         if (imgui.begin("Operation", &open, .{})) switch (any_operation.*) {
@@ -125,7 +125,7 @@ pub fn onFrame() !void {
                 if (imgui.beginCombo("stroke cap", @tagName(op.style.stroke.cap), .{})) {
                     inline for (@typeInfo(math.Stroke.CapStyle).Enum.fields) |field| {
                         const tag = @field(math.Stroke.CapStyle, field.name);
-                        if (imgui.selectable(field.name ++ "", op.style.stroke.cap == tag, .{}, .{ .x = 0, .y = 0 })) {
+                        if (imgui.selectable(field.name ++ "", op.style.stroke.cap == tag, .{}, .{})) {
                             op.style.stroke.cap = tag;
                             try editor.updateOperation();
                         }
@@ -141,7 +141,8 @@ pub fn onFrame() !void {
 
                 if (imgui.inputFloat2("position", &op.position[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+                imgui.separator();
+                if (imgui.button("grab position", .{}))
                     editor.capture = .{ .Position = editor.Capture.Position.init(&op.position) };
             },
             .AddShape => |*op| {
@@ -149,8 +150,6 @@ pub fn onFrame() !void {
 
                 if (imgui.inputFloat2("center position", &op.rect.pos[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.rect.pos) };
 
                 if (imgui.checkbox("lock aspect ratio", &op.lock_aspect)) {
                     op.rect.radius[1] = op.rect.radius[0];
@@ -166,26 +165,32 @@ pub fn onFrame() !void {
                     if (imgui.inputFloat2("radius", &op.rect.radius[0], null, .{}))
                         try editor.updateOperation();
                 }
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Scale = editor.Capture.Scale.init(&op.rect.radius, op.rect.pos, op.lock_aspect) };
 
                 if (imgui.inputFloat("corner radius", &op.rect.corner_radius, 0, 0, null, .{}))
                     try editor.updateOperation();
+
+                imgui.separator();
+                if (imgui.button("grab position", .{}))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.rect.pos) };
+                if (imgui.button("grab radius", .{}))
+                    editor.capture = .{ .Scale = editor.Capture.Scale.init(&op.rect.radius, op.rect.pos, op.lock_aspect) };
             },
             .Append => |*op| {
                 imgui.text("Append");
 
                 if (imgui.inputFloat2("position", &op.position[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.position) };
 
                 var angle_deg = std.math.radiansToDegrees(f32, op.angle);
                 if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
                     op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
                 }
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+
+                imgui.separator();
+                if (imgui.button("grab position", .{}))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.position) };
+                if (imgui.button("grab angle", .{}))
                     editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&op.angle, op._pos_a, op.position) };
             },
             .Connect => |*op| {
@@ -196,7 +201,9 @@ pub fn onFrame() !void {
                     op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
                 }
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+
+                imgui.separator();
+                if (imgui.button("grab angle", .{}))
                     editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&op.angle, op._pos_a, op._pos_b) };
             },
             .Move => |*op| {
@@ -204,7 +211,9 @@ pub fn onFrame() !void {
 
                 if (imgui.inputFloat2("offset", &op.offset[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+
+                imgui.separator();
+                if (imgui.button("grab offset", .{}))
                     editor.capture = .{ .Offset = editor.Capture.Offset.init(&op.offset) };
             },
             .Rotate => |*op| {
@@ -212,15 +221,17 @@ pub fn onFrame() !void {
 
                 if (imgui.inputFloat2("origin", &op.origin[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.origin) };
 
                 var angle_deg = std.math.radiansToDegrees(f32, op.angle);
                 if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
                     op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
                 }
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+
+                imgui.separator();
+                if (imgui.button("grab origin", .{}))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.origin) };
+                if (imgui.button("grab angle", .{}))
                     editor.capture = .{ .Angle = editor.Capture.Angle.init(&op.angle, op.origin) };
             },
             .Scale => |*op| {
@@ -228,8 +239,6 @@ pub fn onFrame() !void {
 
                 if (imgui.inputFloat2("origin", &op.origin[0], null, .{}))
                     try editor.updateOperation();
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
-                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.origin) };
 
                 if (imgui.checkbox("lock aspect ratio", &op.lock_aspect)) {
                     op.scale[1] = op.scale[0];
@@ -245,7 +254,11 @@ pub fn onFrame() !void {
                     if (imgui.inputFloat2("scale", &op.scale[0], null, .{}))
                         try editor.updateOperation();
                 }
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+
+                imgui.separator();
+                if (imgui.button("grab origin", .{}))
+                    editor.capture = .{ .Position = editor.Capture.Position.init(&op.origin) };
+                if (imgui.button("grab scale", .{}))
                     editor.capture = .{ .Scale = editor.Capture.Scale.init(&op.scale, op.origin, op.lock_aspect) };
             },
             .Remove => |*op| {
@@ -258,11 +271,13 @@ pub fn onFrame() !void {
                 imgui.text("Change Arc Angle");
 
                 var angle_deg = std.math.radiansToDegrees(f32, op.angle);
-                if (imgui.inputFloat("##angle", &angle_deg, 0, 0, null, .{})) {
+                if (imgui.inputFloat("angle", &angle_deg, 0, 0, null, .{})) {
                     op.angle = std.math.degreesToRadians(f32, angle_deg);
                     try editor.updateOperation();
                 }
-                if (imgui.isItemHovered(.{}) and imgui.isMouseDoubleClicked(.left))
+
+                imgui.separator();
+                if (imgui.button("grab angle", .{}))
                     editor.capture = .{ .ArcAngle = editor.Capture.ArcAngle.init(&op.angle, op._pos_a, op._pos_b) };
             },
             .Order => |*op| {
@@ -515,7 +530,7 @@ pub fn onFrame() !void {
             if (imgui.beginCombo("default stroke cap", @tagName(editor.default_style.stroke.cap), .{})) {
                 inline for (@typeInfo(math.Stroke.CapStyle).Enum.fields) |field| {
                     const tag = @field(math.Stroke.CapStyle, field.name);
-                    if (imgui.selectable(field.name ++ "", editor.default_style.stroke.cap == tag, .{}, .{ .x = 0, .y = 0 })) {
+                    if (imgui.selectable(field.name ++ "", editor.default_style.stroke.cap == tag, .{}, .{})) {
                         editor.default_style.stroke.cap = tag;
                         try editor.updateOperation();
                     }
