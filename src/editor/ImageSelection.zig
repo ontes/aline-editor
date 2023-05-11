@@ -310,7 +310,7 @@ pub fn generateTransformEdges(is: ImageSelection, mat: math.Mat3, gen: anytype) 
     while (i < is.len()) : (i += 1) {
         const ps = is.getComp(i);
         if (ps.isLooped()) continue;
-        if ((ps.path.isLooped() or ps.a > 0) and !is.isNodeSelected(i, ps.path.prevNode(ps.a))) {
+        if ((ps.path.isLooped() or ps.a > 0) and !is.isNodeSelected(ps.path.index, ps.path.prevNode(ps.a))) {
             var arc = ps.path.getArc(ps.path.prevNode(ps.a));
             arc.pos_b = math.transform(mat, arc.pos_b);
             try arc.generate(gen);
@@ -318,7 +318,7 @@ pub fn generateTransformEdges(is: ImageSelection, mat: math.Mat3, gen: anytype) 
         if (ps.path.isLooped() or ps.b + 1 < ps.path.getNodeCount()) {
             var arc = ps.path.getArc(ps.b);
             arc.pos_a = math.transform(mat, arc.pos_a);
-            if (is.isNodeSelected(i, ps.path.nextNode(ps.b)))
+            if (is.isNodeSelected(ps.path.index, ps.path.nextNode(ps.b)))
                 arc.pos_b = math.transform(mat, arc.pos_b);
             try arc.generate(gen);
         }
