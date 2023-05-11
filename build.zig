@@ -83,6 +83,7 @@ pub fn build(b: *std.build.Builder) !void {
     exe.linkLibrary(nfd_lib);
     exe.addPackage(nfd_pkg);
 
+    // stb
     const stb_lib = b.addStaticLibrary("stb", null);
     stb_lib.setTarget(target);
     stb_lib.setBuildMode(mode);
