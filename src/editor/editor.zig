@@ -23,6 +23,7 @@ pub var canvas_pan: math.Vec2 = .{ 0, 0 };
 pub var canvas_zoom: f32 = 1;
 pub var canvas_size = [2]u32{ 512, 512 };
 pub var canvas_color = [4]f32{ 1, 1, 1, 1 };
+pub var export_scale: f32 = 1;
 
 pub var default_style = Image.Path.Style{
     .stroke = .{ .width = 2, .cap = .round },

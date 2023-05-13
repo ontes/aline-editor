@@ -56,9 +56,12 @@ pub fn renderToScreen() void {
     context.swapchain.present();
 }
 
-pub fn renderToFile(path: [*:0]const u8, canvas_size: [2]u32, canvas_color: [4]f32) !void {
-    const size = webgpu.Extent3D{ .width = canvas_size[0], .height = canvas_size[1] };
-    setTransform(math.mat3.scale(.{ 2 / @intToFloat(f32, size.width), 2 / @intToFloat(f32, size.height), 1 }));
+pub fn renderToFile(path: [*:0]const u8, canvas_size: [2]u32, canvas_color: [4]f32, scale: f32) !void {
+    const size = webgpu.Extent3D{
+        .width = @floatToInt(u32, @intToFloat(f32, canvas_size[0]) * scale),
+        .height = @floatToInt(u32, @intToFloat(f32, canvas_size[1]) * scale),
+    };
+    setTransform(math.mat3.scale(.{ 2 / @intToFloat(f32, canvas_size[0]), 2 / @intToFloat(f32, canvas_size[1]), 1 }));
 
     const texture = context.device.createTexture(&.{
         .usage = .{ .render_attachment = true, .copy_src = true },

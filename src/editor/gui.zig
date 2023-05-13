@@ -513,10 +513,10 @@ pub fn onFrame() !void {
             imgui.separator();
 
             var history_len: c_int = @intCast(c_int, editor.history.max_len - 1);
-            if (imgui.inputInt("undo history max length", &history_len, 1, 100, .{})) {
+            if (imgui.inputInt("undo history max length", &history_len, 1, 100, .{}))
                 editor.history.max_len = @intCast(usize, @max(history_len + 1, 2));
-            }
             _ = imgui.checkbox("operation live preview", &editor.live_preview);
+            _ = imgui.inputFloat("export scale", &editor.export_scale, 0, 0, null, .{});
 
             imgui.separator();
 

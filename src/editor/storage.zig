@@ -87,7 +87,7 @@ pub fn saveToFile(path: [*:0]const u8) !void {
 }
 
 pub fn exportToFile(path: [*:0]const u8) !void {
-    try rendering.renderToFile(path, editor.canvas_size, editor.canvas_color);
+    try rendering.renderToFile(path, editor.canvas_size, editor.canvas_color, editor.export_scale);
 }
 
 pub fn load() !void {
