@@ -39,7 +39,12 @@ pub fn onEvent(event: platform.Event) !void {
             .left_shift, .right_shift => shift_pressed = true,
             .left_alt, .right_alt => alt_pressed = true,
             else => if (!gui.isKeyboardCaptured()) {
-                try beginOperation(key);
+                try editor.finishOperation();
+                if (ctrl_pressed) {
+                    try handleCtrlShortcut(key);
+                } else {
+                    try beginOperation(key);
+                }
             },
         },
         .key_release => |key| switch (key) {
@@ -120,8 +125,20 @@ pub fn onEvent(event: platform.Event) !void {
     }
 }
 
+fn handleCtrlShortcut(key: platform.Key) !void {
+    switch (key) {
+        .a => try editor.selectAll(),
+        .n => editor.clear(),
+        .o => storage.load() catch |err| std.debug.print("Opening failed: {}\n", .{err}),
+        .s => storage.save() catch |err| std.debug.print("Saving failed: {}\n", .{err}),
+        .e => storage.export_() catch |err| std.debug.print("Exporting failed: {}\n", .{err}),
+        .z => if (editor.history.canUndo()) editor.undo(),
+        .y => if (ctrl_pressed and editor.history.canRedo()) editor.redo(),
+        else => {},
+    }
+}
+
 fn beginOperation(key: platform.Key) !void {
-    try editor.finishOperation();
     switch (key) {
         .tab => if (editor.Operation.ChangeStyle.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .ChangeStyle = op });
@@ -129,9 +146,7 @@ fn beginOperation(key: platform.Key) !void {
         .f2 => if (editor.Operation.Rename.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Rename = op });
         },
-        .a => if (ctrl_pressed) {
-            try editor.selectAll();
-        } else if (editor.Operation.AddPoint.init(editor.getIS())) |op| {
+        .a => if (editor.Operation.AddPoint.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .AddPoint = op });
             editor.capture = .{ .Position = editor.Capture.Position.init(&editor.operation.?.AddPoint.position) };
         } else if (editor.Operation.Append.init(editor.getIS())) |op| {
@@ -149,9 +164,7 @@ fn beginOperation(key: platform.Key) !void {
             try editor.setOperation(.{ .Rotate = op });
             editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
         },
-        .s => if (ctrl_pressed) {
-            storage.save() catch |err| std.debug.print("Saving failed: {}\n", .{err});
-        } else if (editor.Operation.Scale.init(editor.getIS())) |op| {
+        .s => if (editor.Operation.Scale.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Scale = op });
             editor.capture = .{ .Scale = editor.Capture.Scale.init(&editor.operation.?.Scale.scale, op.origin, op.lock_aspect) };
         },
@@ -171,15 +184,6 @@ fn beginOperation(key: platform.Key) !void {
             var op = op_;
             op.offset = if (shift_pressed) -editor.Operation.Order.getLimit(editor.getIS()) else -1;
             try editor.setOperation(.{ .Order = op });
-        },
-        .z => if (ctrl_pressed and editor.history.canUndo()) {
-            editor.undo();
-        },
-        .y => if (ctrl_pressed and editor.history.canRedo()) {
-            editor.redo();
-        },
-        .e => if (ctrl_pressed) {
-            storage.export_() catch |err| std.debug.print("Exporting failed: {}\n", .{err});
         },
         else => {},
     }

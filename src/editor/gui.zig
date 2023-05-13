@@ -451,7 +451,10 @@ pub fn onFrame() !void {
 
     if (imgui.beginMainMenuBar()) {
         if (imgui.beginMenu("File", true)) {
-            if (imgui.menuItem("Open", null, false, true)) {
+            if (imgui.menuItem("New", "CTRL+N", false, true)) {
+                editor.clear();
+            }
+            if (imgui.menuItem("Open", "CTRL+O", false, true)) {
                 storage.load() catch |err| std.debug.print("Opening failed: {}\n", .{err});
             }
             if (imgui.menuItem("Save", "CTRL+S", false, true)) {
@@ -460,6 +463,7 @@ pub fn onFrame() !void {
             if (imgui.menuItem("Save As...", null, false, true)) {
                 storage.saveAs() catch |err| std.debug.print("Saving failed: {}\n", .{err});
             }
+            imgui.separator();
             if (imgui.menuItem("Export PNG", "CTRL+E", false, true)) {
                 storage.export_() catch |err| std.debug.print("Exporting failed: {}\n", .{err});
             }

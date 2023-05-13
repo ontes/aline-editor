@@ -606,6 +606,21 @@ pub fn selectAll() !void {
     should_draw_helper = true;
 }
 
+pub fn clear() void {
+    const image = Image.init(history.get().image.allocator);
+    history.clear();
+    history.add(.{ .image = image }) catch unreachable;
+
+    canvas_pan = .{ 0, 0 };
+    canvas_zoom = 1;
+    canvas_size = .{ 512, 512 };
+    canvas_color = .{ 1, 1, 1, 1 };
+
+    should_draw_image = true;
+    should_draw_helper = true;
+    should_draw_canvas = true;
+}
+
 const select_color = [4]f32{ 0.9, 0.9, 0, 1 };
 const preview_color = [4]f32{ 0.9, 0, 0, 1 };
 
