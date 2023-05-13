@@ -5,6 +5,7 @@ const editor = @import("editor.zig");
 const input = @import("input.zig");
 const gui = @import("gui.zig");
 const rendering = @import("rendering.zig");
+const storage = @import("storage.zig");
 
 const desired_frame_time = 10 * std.time.ns_per_ms;
 
@@ -27,6 +28,7 @@ fn deinit() void {
     editor.deinit();
     gui.deinit();
     rendering.deinit();
+    storage.deinit();
     window.destroy();
     platform.deinit();
 }

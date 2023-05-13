@@ -4,7 +4,6 @@ const platform = @import("platform");
 const webgpu = @import("webgpu");
 const imgui = @import("imgui");
 const imgui_impl_wgpu = @import("imgui_impl_wgpu");
-const nfd = @import("nfd");
 
 const editor = @import("editor.zig");
 const storage = @import("storage.zig");
@@ -453,23 +452,19 @@ pub fn onFrame() !void {
     if (imgui.beginMainMenuBar()) {
         if (imgui.beginMenu("File", true)) {
             if (imgui.menuItem("Open", null, false, true)) {
-                var path: [*:0]u8 = undefined;
-                if (nfd.openDialog(null, null, &path) == .okay) {
-                    editor.loadFromFile(path) catch |err| std.debug.print("Opening failed: {}\n", .{err});
-                }
+                storage.load() catch |err| std.debug.print("Opening failed: {}\n", .{err});
             }
-            if (imgui.menuItem("Save", null, false, true)) {
-                var path: [*:0]u8 = undefined;
-                if (nfd.saveDialog(null, "image.bin", &path) == .okay) {
-                    editor.saveToFile(path) catch |err| std.debug.print("Saving failed: {}\n", .{err});
-                }
+            if (imgui.menuItem("Save", "CTRL+S", false, true)) {
+                storage.save() catch |err| std.debug.print("Saving failed: {}\n", .{err});
             }
-            imgui.separator();
-            if (imgui.menuItem("Export PNG", null, false, true)) {
-                var path: [*:0]u8 = undefined;
-                if (nfd.saveDialog(null, "image.png", &path) == .okay) {
-                    editor.exportToFile(path) catch |err| std.debug.print("Exporting failed: {}\n", .{err});
-                }
+            if (imgui.menuItem("Save As...", null, false, true)) {
+                storage.saveAs() catch |err| std.debug.print("Saving failed: {}\n", .{err});
+            }
+            if (imgui.menuItem("Export PNG", "CTRL+E", false, true)) {
+                storage.export_() catch |err| std.debug.print("Exporting failed: {}\n", .{err});
+            }
+            if (imgui.menuItem("Export PNG As...", null, false, true)) {
+                storage.exportAs() catch |err| std.debug.print("Exporting failed: {}\n", .{err});
             }
             imgui.separator();
             if (imgui.menuItem("Preferences", null, false, !preferences_open)) {

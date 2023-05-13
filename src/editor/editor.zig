@@ -6,7 +6,6 @@ const ImageSelection = @import("ImageSelection.zig");
 const History = @import("History.zig");
 const snapping = @import("snapping.zig");
 const rendering = @import("rendering.zig");
-const storage = @import("storage.zig");
 
 pub var history: History = undefined;
 pub var operation: ?Operation = null;
@@ -654,27 +653,4 @@ fn getWideStroke() math.Stroke {
 
 fn getDefaultName(index: usize) Image.Path.Name {
     return .{ 'P', 'a', 't', 'h', ' ', '0' + @intCast(u8, (index / 10) % 10), '0' + @intCast(u8, index % 10) } ++ .{0} ** 25;
-}
-
-pub fn loadFromFile(path: [*:0]const u8) !void {
-    const file = try std.fs.openFileAbsoluteZ(path, .{});
-    defer file.close();
-    const ii = try storage.readImage(file, history.get().image.allocator);
-    canvas_size = ii.canvas_size;
-    canvas_color = ii.canvas_color;
-    history.clear();
-    try history.add(.{ .image = ii.image });
-    should_draw_image = true;
-    should_draw_helper = true;
-    should_draw_canvas = true;
-}
-
-pub fn saveToFile(path: [*:0]const u8) !void {
-    const file = try std.fs.createFileAbsoluteZ(path, .{});
-    defer file.close();
-    try storage.writeImage(file, .{ .image = history.get().image, .canvas_size = canvas_size, .canvas_color = canvas_color });
-}
-
-pub fn exportToFile(path: [*:0]const u8) !void {
-    try rendering.renderToFile(path, canvas_size, canvas_color);
 }

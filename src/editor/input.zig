@@ -4,6 +4,7 @@ const platform = @import("platform");
 
 const editor = @import("editor.zig");
 const snapping = @import("snapping.zig");
+const storage = @import("storage.zig");
 const gui = @import("gui.zig");
 
 var mouse_pos: math.Vec2 = .{ 0, 0 };
@@ -148,7 +149,9 @@ fn beginOperation(key: platform.Key) !void {
             try editor.setOperation(.{ .Rotate = op });
             editor.capture = .{ .Angle = editor.Capture.Angle.init(&editor.operation.?.Rotate.angle, op.origin) };
         },
-        .s => if (editor.Operation.Scale.init(editor.getIS())) |op| {
+        .s => if (ctrl_pressed) {
+            storage.save() catch |err| std.debug.print("Saving failed: {}\n", .{err});
+        } else if (editor.Operation.Scale.init(editor.getIS())) |op| {
             try editor.setOperation(.{ .Scale = op });
             editor.capture = .{ .Scale = editor.Capture.Scale.init(&editor.operation.?.Scale.scale, op.origin, op.lock_aspect) };
         },
@@ -174,6 +177,9 @@ fn beginOperation(key: platform.Key) !void {
         },
         .y => if (ctrl_pressed and editor.history.canRedo()) {
             editor.redo();
+        },
+        .e => if (ctrl_pressed) {
+            storage.export_() catch |err| std.debug.print("Exporting failed: {}\n", .{err});
         },
         else => {},
     }
