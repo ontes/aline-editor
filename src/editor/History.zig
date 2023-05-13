@@ -4,7 +4,7 @@ const ImageSelection = @import("ImageSelection.zig");
 const History = @This();
 
 level: usize = 0,
-max_len: usize = std.math.maxInt(usize),
+max_len: usize = 101,
 entries: std.ArrayList(ImageSelection),
 
 pub fn init(allocator: std.mem.Allocator) History {
