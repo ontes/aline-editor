@@ -49,29 +49,38 @@ pub fn build(b: *std.build.Builder) !void {
     exe.setBuildMode(mode);
 
     // dawn
+    const dawn_lib = b.addStaticLibrary("dawn", null);
+    dawn_lib.setTarget(target);
+    dawn_lib.setBuildMode(mode);
+    dawn_build.link(dawn_lib, .{
+        .enable_d3d12 = false,
+        .enable_metal = false,
+        .enable_null = true,
+        .enable_opengl = os_tag == .linux,
+        .enable_opengles = os_tag == .linux,
+        .enable_vulkan = true,
+        .use_wayland = false,
+        .use_x11 = os_tag == .linux,
+    }, "lib/dawn/");
+
     if (std.fs.cwd().access("lib/dawn/zig-out", .{})) |_| { // don't build dawn when dawn binary is available
         std.debug.print("Using webgpu_dawn library from 'lib/dawn/zig-out/lib'\n", .{});
         exe.addLibraryPath("lib/dawn/zig-out/lib");
         exe.linkSystemLibrary("webgpu_dawn");
-        exe.addIncludePath("lib/dawn/dawn/include");
-        exe.addIncludePath("lib/dawn/dawn-gen/include");
     } else |_| {
-        dawn_build.link(exe, .{
-            .enable_d3d12 = false,
-            .enable_metal = false,
-            .enable_null = true,
-            .enable_opengl = os_tag == .linux,
-            .enable_opengles = os_tag == .linux,
-            .enable_vulkan = true,
-            .use_wayland = false,
-            .use_x11 = os_tag == .linux,
-        }, "lib/dawn/");
+        exe.linkLibrary(dawn_lib);
     }
     exe.addPackage(webgpu_pkg);
 
     // imgui
-    imgui_build.link(exe, "lib/imgui/");
-    imgui_build.linkImpl(exe, "wgpu", "lib/imgui/");
+    const imgui_lib = b.addStaticLibrary("imgui", null);
+    imgui_build.link(imgui_lib, "lib/imgui/");
+
+    imgui_lib.addIncludePath("lib/dawn/dawn/include");
+    imgui_lib.addIncludePath("lib/dawn/dawn-gen/include");
+    imgui_build.linkImpl(imgui_lib, "wgpu", "lib/imgui/");
+
+    exe.linkLibrary(imgui_lib);
     exe.addPackage(imgui_pkg);
     exe.addPackage(imgui_impl_wgpu_pkg);
 
@@ -107,14 +116,48 @@ pub fn build(b: *std.build.Builder) !void {
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    if (b.args) |args| run_cmd.addArgs(args);
+    b.step("run", "Run the app").dependOn(&run_cmd.step);
 
-    const exe_tests = b.addTest("src/editor/main.zig");
-    exe_tests.setTarget(target);
-    exe_tests.setBuildMode(mode);
-    b.step("test", "Run unit tests").dependOn(&exe_tests.step);
+    // performance test
+
+    const exe_perf = b.addExecutable("aline-editor-perf-test", "src/editor/main_perf_test.zig");
+    exe_perf.setTarget(target);
+    exe_perf.setBuildMode(mode);
+
+    if (std.fs.cwd().access("lib/dawn/zig-out", .{})) |_| { // don't build dawn when dawn binary is available
+        std.debug.print("Using webgpu_dawn library from 'lib/dawn/zig-out/lib'\n", .{});
+        exe_perf.addLibraryPath("lib/dawn/zig-out/lib");
+        exe_perf.linkSystemLibrary("webgpu_dawn");
+        exe_perf.addIncludePath("lib/dawn/dawn/include");
+        exe_perf.addIncludePath("lib/dawn/dawn-gen/include");
+    } else |_| {
+        exe_perf.linkLibrary(dawn_lib);
+    }
+    exe_perf.addPackage(webgpu_pkg);
+
+    exe_perf.linkLibrary(imgui_lib);
+    exe_perf.addPackage(imgui_pkg);
+    exe_perf.addPackage(imgui_impl_wgpu_pkg);
+
+    exe_perf.linkLibrary(nfd_lib);
+    exe_perf.addPackage(nfd_pkg);
+
+    exe_perf.linkLibrary(stb_lib);
+    exe_perf.addPackage(stb_pkg);
+
+    switch (target.os_tag orelse @import("builtin").target.os.tag) {
+        .linux => exe_perf.linkSystemLibrary("X11"),
+        .windows => exe_perf.linkSystemLibrary("user32"),
+        else => return error.UnsupportedTarget,
+    }
+    exe_perf.addPackage(platform_pkg);
+
+    exe_perf.addPackage(math_pkg);
+    exe_perf.addPackage(render_pkg);
+
+    const run_cmd_perf = exe_perf.run();
+    // run_cmd_perf.step.dependOn(&b.addInstallArtifact(exe_perf).step);
+    if (b.args) |args| run_cmd_perf.addArgs(args);
+    b.step("perf", "Run performance test").dependOn(&run_cmd_perf.step);
 }
