@@ -71,7 +71,11 @@ fn onFrame() !void {
 
 fn addRandomTriangle() !void {
     const image = &editor.history.get().image;
-    var pass = try image.generator(editor.default_style, .{'T'} ++ .{0} ** 31).begin();
+    var pass = try image.generator(.{
+        .stroke = .{ .width = 2, .cap = .round },
+        .fill_color = .{ random.float(f32), random.float(f32), random.float(f32), random.float(f32) },
+        .stroke_color = .{ 0, 0, 0, 1 },
+    }, .{'T'} ++ .{0} ** 31).begin();
     var i: u32 = 0;
     while (i < 3) : (i += 1) {
         try pass.add(.{ (random.float(f32) - 0.5) * 512, (random.float(f32) - 0.5) * 512 }, random.float(f32) - 0.5);
