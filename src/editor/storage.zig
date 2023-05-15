@@ -46,15 +46,15 @@ pub fn loadFromFile(path: [*:0]const u8) !void {
 
     var image = Image.init(editor.history.get().image.allocator);
 
-    var props_len: [1]usize = undefined;
-    try readAny(file, @as([]usize, &props_len));
+    var props_len: [1]u32 = undefined;
+    try readAny(file, @as([]u32, &props_len));
     try image.props.resize(image.allocator, props_len[0]);
     try readAny(file, image.props.items(.node_count));
     try readAny(file, image.props.items(.style));
     try readAny(file, image.props.items(.name));
 
-    var nodes_len: [1]usize = undefined;
-    try readAny(file, @as([]usize, &nodes_len));
+    var nodes_len: [1]u32 = undefined;
+    try readAny(file, @as([]u32, &nodes_len));
     try image.nodes.resize(image.allocator, nodes_len[0]);
     try readAny(file, image.nodes.items(.position));
     try readAny(file, image.nodes.items(.angle));
@@ -77,11 +77,11 @@ pub fn saveToFile(path: [*:0]const u8) !void {
 
     const image = editor.history.get().image;
 
-    try writeAny(file, @as([]const usize, &.{image.props.len}));
+    try writeAny(file, @as([]const u32, &.{@intCast(u32, image.props.len)}));
     try writeAny(file, image.props.items(.node_count));
     try writeAny(file, image.props.items(.style));
     try writeAny(file, image.props.items(.name));
-    try writeAny(file, @as([]const usize, &.{image.nodes.len}));
+    try writeAny(file, @as([]const u32, &.{@intCast(u32, image.nodes.len)}));
     try writeAny(file, image.nodes.items(.position));
     try writeAny(file, image.nodes.items(.angle));
 }
